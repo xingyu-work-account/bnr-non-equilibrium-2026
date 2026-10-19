@@ -1,0 +1,674 @@
+"""Markdown report helpers."""
+
+from __future__ import annotations
+
+import math
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+SVG_HASHSALT = "bnr_neq"  # fixed salt for SVG element ids, so repeated runs write byte-identical SVG files
+
+
+def pyplot():
+    """matplotlib.pyplot on the non-interactive Agg backend with a fixed SVG hash salt."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    matplotlib.rcParams["svg.hashsalt"] = SVG_HASHSALT
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
+def fmt(value: object, digits: int = 4) -> str:
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "NaN"
+        return f"{value:.{digits}g}"
+    return str(value)
+
+
+def md_table(df: pd.DataFrame, digits: int = 4) -> str:
+    """Render a DataFrame as a GitHub Markdown table (no external dependency)."""
+    cols = [str(c) for c in df.columns]
+    lines = ["| " + " | ".join(cols) + " |", "| " + " | ".join("---" for _ in cols) + " |"]
+    for row in df.itertuples(index=False):
+        cells = [fmt(v.item() if hasattr(v, "item") else v, digits).replace("|", "\\|") for v in row]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+# =============================================================================
+# Analysis report (M8): assembled from the generated tables, never from hand-entered numbers
+# =============================================================================
+TABLE_DESCRIPTIONS = {
+    "data_properties.csv": "M1: measured file properties against Section 4",
+    "dropped_rows.csv": "M1: every dropped row with file and line",
+    "gaps.csv": "M1: gap and missing-sample inventory",
+    "grid_coverage.csv": "M1: 0.01 d grid coverage per sensor",
+    "sensor_validation.csv": "M2: predicted and observed response to each pulse",
+    "sensor_validation_windows.csv": "M2: window medians and sample counts",
+    "sensor_balances.csv": "M2: cumulative EC and nitrogen balances",
+    "sensor_validation_references.csv": "M2: reference comparison",
+    "sensor_verdicts.csv": "M2: sensor verdicts with their a priori criteria",
+    "nh4_jumps.csv": "M2: NH4 jump candidates, classification and transition times",
+    "nh4_held_segments.csv": "M2: held/damped NH4 output segments",
+    "nh4_hf_residual_subsegments.csv": "M2: NH4 high-frequency residual per sub-segment",
+    "ec_late_pulses.csv": "M2: late conductivity pulses with decay fits",
+    "ec_late_pulse_sensitivity.csv": "M2: late-pulse count against threshold",
+    "clock_check.csv": "M2 (corrected in M3): step timing at the day-2.89 multi-probe event",
+    "segments.csv": ("M3: sub-segments, Theil-Sen slopes of the reading, held fraction; gain-corrected consumption and "
+                     "reading-as-TAN free ammonia (SENSITIVITY since W1)"),
+    "segments_window_check.csv": "M3: no slope window contains a pulse or any NH4 step candidate",
+    "segments_reference_windows.csv": "M3: slopes on the exact preliminary windows (diagnostic)",
+    "segments_references.csv": "M3: reference comparison",
+    "kinetic_fits.csv": "M3: zero/first-order, Monod, Haldane fits per segment",
+    "kinetic_parameters.csv": "M3: kinetic parameters with Jacobian-based identifiability",
+    "changepoints.csv": "M3: PELT breaks and events",
+    "changepoint_sensitivity.csv": "M3: PELT break count against penalty",
+    "lomb_scargle_summary.csv": "M3: Lomb-Scargle maxima per band",
+    "thermo_affinity_steps.csv": "M4: affinity step at each pulse",
+    "thermo_coexistence.csv": "M4: coexistence SCENARIO affinity and DO sensitivity",
+    "thermo_chloride_scenarios.csv": "M4: bare-Ag chloride SCENARIOS",
+    "thermo_chloride_observed.csv": "M4: observed ORP/pH changes and the oxide alternative",
+    "thermo_co2.csv": "M4: air-equilibrium bicarbonate",
+    "thermo_oxygen.csv": "M4: oxygen demand and required kLa under the linear gain model (SENSITIVITY since W1)",
+    "balance_nitrogen.csv": "M4: nitrogen balance",
+    "balance_chloride.csv": "M4: chloride balance",
+    "balance_alkalinity.csv": "M4: alkalinity balance, with the W2 bound and V(t) scenarios",
+    "alkalinity_bound.csv": "W2: upper bound on cumulative nitrification against Alk0 (1-15 meq/L), residual TAN and FA",
+    "alkalinity_references.csv": "W2: reference checks of the carbonate and bound functions",
+    "volume_scenarios.csv": "W8: vessel volume scenarios V(t), pulse doses and the evaporation upper bound",
+    "thermo_references.csv": "M4: reference comparison",
+    "estimator_validation.csv": "M5: estimator validation suite, matched-null regimes and gate checks",
+    "dynamics.csv": "M5: irreversibility and complexity per series and segment",
+    "dynamics_windows.csv": "M5: per-window stationarity, indices and surrogate p-values",
+    "dynamics_onsager.csv": "M5: Onsager regression test per pulse",
+    "dynamics_onsager_lags.csv": "M5: Onsager ratio against lag",
+    "dynamics_stability.csv": "M5: stability indicators before each pulse (exploratory)",
+    "dynamics_flux.csv": "M5: probability-flux circulation",
+    "dynamics_electrode.csv": "M5: electrode-dynamics guard",
+    "model_fit.csv": "M6: model comparison and out-of-sample skill",
+    "model_identifiability.csv": "M6: profile-likelihood identifiability",
+    "model_checks.csv": "M6: mass-balance and σ consistency checks",
+    "model_response_fractions.csv": "M6: model-implied against observed response fractions",
+    "nh4_truth_summary.csv": "W1: the single NH4 observation model, its inverted C(t) and band",
+    "nh4_truth_vectors.csv": "W1: profile parameter vectors whose inversions form the C(t) band",
+    "nh4_truth_windows.csv": "W1: consumption, free ammonia and O2 demand of the inverted C(t) per slope window",
+    "nh4_truth_balance.csv": "W1: dose-anchored TAN bound (with the W2 bound) against the inverted C(t)",
+    "nh4_truth_w2_consistency.csv": "S2: per checkpoint, the Alk0 the C(t)-implied removal needs, and the verdict",
+    "volume_constraints.csv": "W8: data constraints on the net water loss and the evaporation SCENARIOS checked",
+    "states_rules.csv": "W3: the pre-registered state rules, thresholds and excluded sensor features",
+    "states_fractions.csv": "W3: time fraction of each state and the idle fraction per pulse interval",
+    "states_timeline.csv": "W3: time-ordered runs of one process state",
+    "states_comparison.csv": "W3: NH4 consumption between indicator groups, block-bootstrap intervals",
+    "pulses.csv": "M7/W4: pulse-level metrics (η, removal, O2, energy family, idle fraction) with inputs and status",
+    "pulses_associations.csv": "M7: exploratory associations",
+    "all_references.csv": "M8: every reference value of the implementation prompt",
+}
+
+FIGURES = [
+    ("fig1_linkage.png", "Figure 1. From sensor signals to process state, oxygen demand, energy and efficiency (W6)"),
+    ("fig2_overview.png", "Figure 2. Common-window overview with pulses, flags and electrode events (M3)"),
+    ("fig3_sensor_validation.png", "Figure 3. Sensor validation with the known pulses (M2)"),
+    ("fig5_dynamics.png", "Figure 5. Estimator validation, irreversibility, Onsager SNR, probability flux (M5)"),
+    ("fig6_model.png", "Figure 6. Reduced model with the electrode observation model (M6)"),
+    ("fig7_pulses.png", "Figure 7. Pulse-level descriptors (M7)"),
+    ("fig4_constraints.png", "Figure 4. Alkalinity bound, rate against free ammonia, state timeline (W6)"),
+    ("fig8_efficiency.png", "Figure 8. Per-pulse η, oxygen utilization, idle fraction and energy under SCENARIOS (W6)"),
+]
+
+def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
+    """Stated assumptions; every number comes from the configuration or a generated table."""
+    from . import dynamics, segments
+
+    nf = cfg.get("sensors.nh4_to_N_factor")
+    temps = ", ".join(f"{x:g}" for x in cfg.get("scenarios.temperature_C"))
+    ident = t["model_identifiability.csv"]
+    n_off = int(ident["parameter"].str.startswith("offset_log_").sum())
+    return [
+        ("File headers differ in spelling from implementation_prompt.md Section 4 for Cond.csv, NH4.csv and ORP.csv; "
+        "the loader maps the headers present in the files and raises on any other (deviation D1)."),
+        ("NH4 and ORP timestamps are rounded to 0.01 d; rows sharing a stamp are uniformly spaced within it "
+        "(t = stamp + 0.01 j/n). The half-sized first stamps suggest round-to-nearest stamps, which would place these "
+        "times 0.005 d late; not corrected."),
+        f"NH4 values are in {cfg.get('sensors.nh4_unit')} (experimenter); converted to mg N/L with {nf:g}.",
+        (f"Conductivity is converted with EC = {cfg.get('sensors.ec_slope_mS_cm_per_A'):g} I + "
+        f"{cfg.get('sensors.ec_intercept_mS_cm'):g} and is not valid as solution conductivity (S3)."),
+        (f"Temperature is not measured: every temperature-dependent value is a SCENARIO value, at the labelled SCENARIO "
+        f"temperatures {temps} °C; values computed with 25 °C constants carry `SCENARIO_T25C` or a `SCENARIO 25 °C` "
+        "basis; ΔG°′ is a 25 °C value."),
+        "Kohlrausch predictions use limiting ionic conductivities at 25 °C (SCENARIO; upper bounds at the actual ionic strength).",
+        "Bare-Ag chloride SCENARIOS use chloride activity = concentration (γ = 1) and equal γ before and after a pulse.",
+        "C* = 8.26 mg/L (SCENARIO 25 °C) for oxygen; p_O2 = 0.2095 x DO/C*. Ω_CO2 would take [HCO3-] ≈ alkalinity (pH < 8.3).",
+        ("Single NH4 observation model (W1): rates, free ammonia, η, ΔA and O2 demand are derived from C(t) inverted "
+        "from the M6 log observation model (quasi-static; lag not inverted); a non-positive consumption is not "
+        "computed and is excluded from duration-weighted rates. Gain-corrected rates (division by the response "
+        "fraction, linear electrode gain model) and free ammonia from the reading taken as TAN are SENSITIVITY cases."),
+        ("Alkalinity bound (W2): 2 eq per mol N nitrified, no alkalinity source, carbonate equilibria (Plummer and "
+        "Busenberg 1982) with activities = concentrations, dissolved CO2 at or above air saturation, pH from the "
+        "0.11 d rolling median; kLa_CO2 and Alk0 are SCENARIO ranges."),
+        ("Volume (W8): the closed 100 mL frame is an assumption until the vessel masses are measured; evaporation "
+        f"SCENARIOS {', '.join(f'{e:g}' for e in cfg.get('scenarios.evaporation_mL_per_d'))} mL/d are carried "
+        "through the balances, the η and the consumption rates (r = −dC/dt + C E/V)."),
+        (f"Slope windows exclude {segments.EXCLUDE_AFTER_BOUNDARY_D} d after every pulse and every NH4 step candidate "
+        "(located or not, sustained or not) and need ≥ "
+        f"{segments.MIN_FIT_SPAN_D} d; held/damped NH4 spans inside a window are flagged (`held_fraction`), with a "
+        "sensitivity slope that removes them."),
+        ("Stationary estimators run only on raw 0.25 d windows passing ADF and KPSS; an index is computed only within "
+        "its validated tie range and, for pH, only inside matched null regimes whose false-positive rate is at most "
+        f"{dynamics.FP_ALPHA} + binomial margin ({dynamics.N_SURR} IAAFT surrogates)."),
+        (f"The M6 model fixes K_NH = 1.0 mg N/L (ASM1), uses offsets at all {n_off} detected electrode-offset jumps, and "
+        "refits the test-window offsets as the only nuisance parameters when scoring the test window; the split "
+        "windows come from the configured pulse times."),
+        ("MODEL-BASED quantities (η, model rates) are conditional on the selected M6 model; C0 and the electrode "
+        "intercept are not identifiable."),
+        ("Process states (W3): pre-registered rules on the 1.01 d Theil-Sen slopes of C(t), pH and ORP and on ORP "
+         "relative to its centred 5 d median (±15 mV); relative ORP assumes a slowly varying bare-Ag reference; QC-flagged "
+         "bins carry no state."),
+        ("Energy (W4): kLa_O2 and the field aeration efficiency SAE are SCENARIO ranges (SAE source: "
+         f"{cfg.get('scenarios.sae_source')}); the O2 supply is a capacity at DO = 0 while DO is not measured; stirrer "
+         "power is a laboratory-specific term only."),
+        ("Model candidates (W5): alkalinity limitation uses the model's own alkalinity state (2 eq/mol N, nothing added) "
+         "with K_ALK = 0.5 meq/L fixed (ASM3)."),
+        ("Electrode fragments (R8): a baseline slope window between two electrode steps shorter than 3 x the longest "
+         "delayed electrode response is a diagnostic, not a rate."),
+    ]
+
+
+class ReportValidationError(RuntimeError):
+    """A required validation check failed; the report is not written."""
+
+
+def check_required(t: dict[str, pd.DataFrame]) -> None:
+    """Raise unless every required estimator check and every M6 consistency check passes, and the pH
+    matched-null gate re-checks against the stored tables."""
+    from . import dynamics
+
+    v = t["estimator_validation.csv"]
+    failed = dynamics.required_failures(v)
+    if not v["required"].astype(str).str.lower().eq("true").any():
+        raise ReportValidationError("estimator_validation.csv has no required check")
+    gate = dynamics.verify_null_gate(t["dynamics_windows.csv"], v)
+    failed += [c for c, ok in zip(gate["check"], gate["pass"]) if not ok]
+    checks = t["model_checks.csv"]
+    failed += [f"model: {c}" for c, ok in zip(checks["check"], checks["pass"].astype(str)) if ok == "False"]
+    if failed:
+        raise ReportValidationError(f"required validation checks failed: {failed}")
+
+
+def _read(tables: Path, name: str) -> pd.DataFrame:
+    p = tables / name
+    if not p.is_file():
+        raise FileNotFoundError(f"{p} missing: run `python -m bnr_neq run-all` stages before report")
+    return pd.read_csv(p)
+
+
+def all_references(tables: Path) -> pd.DataFrame:
+    m2 = _read(tables, "sensor_validation_references.csv")
+    m2 = m2.assign(milestone="M2", quantity=m2["quantity"] + m2["pulse"].map(lambda p: "" if pd.isna(p) else f" (pulse {int(p)})"))
+    m3 = _read(tables, "segments_references.csv").assign(milestone="M3")
+    m4 = _read(tables, "thermo_references.csv").assign(milestone="M4")
+    cols = ["milestone", "quantity", "reference", "obtained", "tolerance", "pass", "note"]
+    return pd.concat([m2[cols], m3[cols], m4[cols]], ignore_index=True)
+
+
+CONSISTENCY = "CONSISTENCY CHECK (not a finding)"
+
+
+def _pm(t: dict[str, pd.DataFrame], metric: str) -> pd.DataFrame:
+    pm = t["pulses.csv"]
+    return pm[(pm["metric"] == metric)]
+
+
+def primary_delta_a(t: dict[str, pd.DataFrame]) -> tuple[pd.Series, pd.Series]:
+    """ΔA at 25 °C on the single NH4 observation model (pulses.csv, M6_log), and the reading-as-TAN SENSITIVITY."""
+    from .model import OBSERVATION_MODEL
+
+    prim = _pm(t, "delta_A_kJ_mol_SCENARIO_T25C")
+    prim = prim[prim["nh4_observation_model"] == OBSERVATION_MODEL]
+    sens = _pm(t, "delta_A_SENSITIVITY_reading_as_TAN_kJ_mol_SCENARIO_T25C")
+    return prim["value"].astype(float), sens["value"].astype(float)
+
+
+def status_labels(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Status of each conclusion; every evidence sentence is derived from the generated tables (values rounded)."""
+    from . import dynamics
+    from .constants import DG0_NITRIFICATION_KJ_MOL_N
+
+    coex = t["thermo_coexistence.csv"]
+    scen = coex[coex["basis"] == "SCENARIO"].copy()
+    scen["affinity_kJ_mol"] = scen["affinity_kJ_mol"].astype(float)
+    doc = float(scen.loc[scen["documented_scenario"].astype(bool), "affinity_kJ_mol"].iloc[0])
+    insitu = coex.loc[coex["basis"] == "IN SITU", "affinity_kJ_mol"].astype(str)
+    insitu_txt = insitu.iloc[0] if len(insitu) and insitu.iloc[0].startswith("not computed") else "computed"
+    dA, dA_sens = primary_delta_a(t)
+    dyn = t["dynamics.csv"]
+    ph = dyn[dyn["series"] == "pH"]
+    ons = t["dynamics_onsager.csv"]
+    pv = t["sensor_validation.csv"]
+    ident = t["model_identifiability.csv"]
+    cl = t["thermo_chloride_scenarios.csv"]
+    cl_cols = [c for c in cl.columns if c.startswith("orp_pred_rise_mV_pulse")]
+    cl_lo, cl_hi = float(cl[cl_cols].min().min()), float(cl[cl_cols].max().max())
+    val = t["estimator_validation.csv"]
+    req = val[val["required"].astype(str).str.lower().eq("true")]
+    n_req_ok = int(req["pass"].astype(str).str.lower().eq("true").sum())
+    win = t["dynamics_windows.csv"]
+    phw = win[(win["series"] == "pH") & (win["transform"] == "raw")]
+    st = phw["ordinal_kl_status"].fillna("") if "ordinal_kl_status" in phw else pd.Series(dtype=str)
+    n_out = int(st.str.startswith(dynamics.OUTSIDE_REGIME).sum())
+    sig = pd.to_numeric(ph["ordinal_kl_significant_windows"], errors="coerce").fillna(0).sum()
+    snr_ok = int(ons["snr_sufficient"].astype(str).str.lower().eq("true").sum())
+    f = pv["nh4_response_fraction"]
+    ec_pred = pv["ec_pred_change_immediate_mS_cm_limiting_SCENARIO_T25C"].iloc[0]
+    checks = t["model_checks.csv"]
+    sigma = checks[checks["check"].astype(str).str.startswith("σ = r A / T")]
+    sigma_txt = (f"min σ = {float(sigma['value'].iloc[0]):.2g} W/(L K)" if len(sigma) else "not in model_checks.csv")
+    cons = t["nh4_truth_w2_consistency.csv"]
+    bad = cons[~cons["consistent_at_best_fit"].astype(bool)]
+    bnd = t["alkalinity_bound.csv"]
+    from . import alkalinity
+
+    h = alkalinity.headline(bnd)
+    n15 = float(h.loc[h["alk0_meq_L"] == h["alk0_meq_L"].max(), "n_nit_max_end_mgN_L"].iloc[0])
+    dosed = float(bnd["dosed_total_mgN_L"].iloc[0])
+    fr = t["states_fractions.csv"].set_index("interval").loc["whole record"]
+    sc = t["states_comparison.csv"]
+    ph_test = sc[sc["comparison"].astype(str).str.startswith("pH rising vs not rising (within")]
+    ph_txt = (f"pH-rising minus non-rising bins {float(ph_test['diff'].iloc[0]):+.2f} mg N/L/d "
+              f"(95 % block bootstrap {float(ph_test['ci95_low'].iloc[0]):+.2f} to {float(ph_test['ci95_high'].iloc[0]):+.2f})"
+              if len(ph_test) and ph_test["status"].iloc[0] == "computed" else "pH test not computed")
+    sae = sorted({float(m.split("_SAE")[1].split("_")[0]) for m in t["pulses.csv"]["metric"]
+                  if str(m).startswith("aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE")})
+    vc = t["volume_constraints.csv"]
+    e_min = vc.loc[vc["constraint"] == "N conservation over every pulse", "value_mL_per_d"]
+    rows = [
+        ("Upper bound on cumulative nitrification from the pH record (W2)", "GO",
+         (f"With Alk0 from 1 to 15 meq/L at most {n15:.0f} of {dosed:.0f} mg N/L dosed could be nitrified by day 47.9 "
+          "(air-equilibrium CO2, constant volume, SCENARIO 25 °C)."),
+         "Assumes no alkalinity source; initial_alkalinity_meq_L missing (scan instead of a value)."),
+        ("Single NH4 observation model against the W2 bound (S2)", "QUALIFIED" if len(bad) else "GO",
+         (f"The removal implied by the inverted C(t) needs Alk0 ≥ {float(cons['alk0_required_if_nitrified_meq_L'].max()):.1f} "
+          f"meq/L if nitrified; contradicted at {', '.join(bad['checkpoint'])}" if len(bad) else
+          "The removal implied by C(t) is compatible with the scanned Alk0.")
+         + " Every C(t)-derived row carries `w2_bound_check`.",
+         "Blocked by: lab_NH4_N_mg_L, initial_alkalinity_meq_L, NO3_N_mg_L (resolve level, Alk0, sink)."),
+        ("Process states from relative ORP, pH and C(t) (W3)", "GO WITH DOCUMENTED NON-BLOCKING DEBT",
+         (f"{100 * fr['classified_fraction']:.0f} % of the record carries a state; idle (inactive, over-supplied) "
+          f"{100 * fr['idle_fraction_of_stirred_time']:.0f} % of stirred time; {ph_txt}."),
+         "Debt: low coverage (held NH4 output, electrode steps); relative ORP assumes a slowly varying reference."),
+        ("Oxygen demand and aeration-equivalent energy (W4)", "SCENARIO FAMILY COMPUTED; NO-GO for absolute values",
+         (f"O2 demand 4.57 g O2/g N on the removal of C(t); SAE {min(sae):g}-{max(sae):g} kg O2/kWh and kLa_O2 SCENARIOS; "
+          f"demand floor {4.57 / max(sae):.2f}-{4.57 / min(sae):.2f} kWh/kg N."),
+         "Blocked by: DO_mg_L, kLa_per_d, temperature_C_measured; QUALIFIED by S2 from pulse 2 on."),
+        ("Closed 100 mL frame (W8)", "NO-GO",
+         (f"Conditional on C(t), N conservation needs a net water loss ≥ {float(e_min.iloc[0]):.2f} mL/d"
+          if len(e_min) else "not computed") + "; evaporation SCENARIOS carried through every balance.",
+         "Blocked by: vessel_mass_start_g, vessel_mass_end_g, covered, top_up_mL."),
+        ("Chemical disequilibrium of the batch (coexistence affinity)", CONSISTENCY,
+         (f"Coexistence SCENARIO affinity {doc:.0f} kJ/mol ({scen['affinity_kJ_mol'].min():.0f} to "
+          f"{scen['affinity_kJ_mol'].max():.0f} kJ/mol for DO {scen['DO_mg_L'].min():g} to {scen['DO_mg_L'].max():g} mg/L): "
+          "computed from assumed concentrations, positive by construction whenever DO > 0."),
+         f"In situ affinity {insitu_txt} (needs DO_mg_L, NO3_N_mg_L)."),
+        ("Affinity steps at the pulses", CONSISTENCY,
+         (f"ΔA = {dA.min():.2f} to {dA.max():.2f} kJ/mol on the M6-inverted C(t) (SCENARIO 25 °C; "
+          f"{100 * dA.min() / abs(DG0_NITRIFICATION_KJ_MOL_N):.2f} to {100 * dA.max() / abs(DG0_NITRIFICATION_KJ_MOL_N):.2f} "
+          f"% of |ΔG°′|); SENSITIVITY reading as TAN {dA_sens.min():.2f} to {dA_sens.max():.2f} kJ/mol. A log ratio of "
+          "concentrations: small by construction for a dose small against the pool."),
+         "None blocking."),
+        ("Entropy production σ = r A / T ≥ 0 in the model", CONSISTENCY,
+         f"{sigma_txt}: a non-negative modelled rate times a positive SCENARIO affinity, true by construction.",
+         "None blocking."),
+        ("Relative comparison of pulse responses (electrode)", "GO WITH DOCUMENTED NON-BLOCKING DEBT",
+         f"Response fractions {', '.join(f'{100 * x:.0f} %' for x in f)} of the dose.",
+         "Debt: gain unverified (lab_NH4_N_mg_L missing); delayed responses unexplained (electrode_step_response)."),
+        ("Absolute NH4 concentrations, rates and conversion", "NO-GO",
+         (f"Electrode registers {100 * f.min():.0f} to {100 * f.max():.0f} % of the dose; C0 and the intercept are not "
+          f"identifiable ({int((~ident['identifiable'].astype(bool)).sum())} parameters not identifiable)."),
+         "Blocked by: lab_NH4_N_mg_L, electrode_step_response, NO3_N_mg_L, NO2_N_mg_L (and recalibration)."),
+        ("Conductivity as solution conductivity", "NO-GO",
+         (f"Observed pulse responses {pv['ec_obs_change_mS_cm'].min():+.3f} to {pv['ec_obs_change_mS_cm'].max():+.3f} mS/cm "
+          f"against +{ec_pred:.3f} predicted (limiting, SCENARIO 25 °C)."),
+         "Blocked by: probe validation (KCl standard addition, calibrated meter), chloride_mmol_L."),
+        ("Absolute redox potential E_H", "NO-GO",
+         (f"ORP response to the chloride added {pv['orp_obs_change_mV'].min():+.1f} to {pv['orp_obs_change_mV'].max():+.1f} mV "
+          f"against {cl_lo:.0f} to {cl_hi:.0f} mV per pulse under chloride SCENARIOS."),
+         "Blocked by: orp_reference_offset_V, chloride_mmol_L."),
+        ("pH trajectory estimators (supplement S1)", "GO WITH DOCUMENTED NON-BLOCKING DEBT",
+         (f"{int(ph['n_stationary'].sum())} of {int(ph['n_windows'].sum())} pH windows stationary; ordinal KL in "
+          f"{int(pd.to_numeric(ph['ordinal_kl_windows'], errors='coerce').fillna(0).sum())} validated windows "
+          f"({n_out} outside validated regimes), significant in {int(sig)}; {n_req_ok} of {len(req)} required checks pass."),
+         (f"Debt: not connected to rates or energy; Onsager test interpretable for {snr_ok} of {len(ons)} pulses.")),
+    ]
+    return pd.DataFrame(rows, columns=["conclusion", "status", "evidence", "missing items / debt"])
+
+
+def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
+    """Compact per-pulse view of the W4 metric family (constant volume; SCENARIO ranges in the column names)."""
+    def get(metric):
+        r = pm[pm["metric"] == metric].set_index("pulse")
+        return r["value"].where(r["status"] == "computed")
+
+    klas = sorted({float(m.split("_kLa")[1].split("_")[0]) for m in pm["metric"] if str(m).startswith("o2_utilization_SCENARIO_kLa")})
+    saes = sorted({float(m.split("_SAE")[1].split("_")[0]) for m in pm["metric"]
+                   if str(m).startswith("aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE")})
+    mid = saes[len(saes) // 2]
+    out = pd.DataFrame({"pulse": sorted(pm["pulse"].unique())}).set_index("pulse")
+    out["η"] = get("eta_conversion_fraction")
+    out["removal / dose"] = get("removal_to_dose_ratio")
+    out["N removed (mg N)"] = get("n_removed_mgN")
+    out["O2 required (mg O2)"] = get("o2_required_mgO2")
+    for k in klas:
+        out[f"O2 utilization, kLa {k:g}/d"] = get(f"o2_utilization_SCENARIO_kLa{k:g}_T25C")
+    out[f"kWh/kg N floor, SAE {max(saes):g}-{min(saes):g}"] = [
+        f"{a:.2f}-{b:.2f}" if pd.notna(a) else "not computed"
+        for a, b in zip(get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{max(saes):g}"),
+                        get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{min(saes):g}"))]
+    for k in klas:
+        out[f"kWh/kg N supply, SAE {mid:g}, kLa {k:g}/d"] = get(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{mid:g}_kLa{k:g}_T25C")
+    out["idle fraction (stirred time)"] = get("idle_fraction_of_stirred_time")
+    out["relaxation time / pulse interval"] = get("relaxation_time_over_pulse_interval")
+    k10 = klas[len(klas) // 2]
+    out[f"ΔG released / aeration energy, SAE {mid:g}, kLa {k10:g}/d"] = get(
+        f"gibbs_to_aeration_energy_supply_SCENARIO_SAE{mid:g}_kLa{k10:g}_T25C")
+    out["W2 check"] = pm.groupby("pulse")["w2_bound_check"].agg(
+        lambda s: "QUALIFIED" if s.astype(str).str.startswith("QUALIFIED").any() else "consistent")
+    return out.astype(object).where(out.notna(), "n.c.").reset_index()  # n.c.: not computed, reason in pulses.csv
+
+
+def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
+    """The one-page process summary; every number from a generated table."""
+    from . import alkalinity
+
+    pm = t["pulses.csv"]
+    v = t["sensor_verdicts.csv"].set_index("key")["verdict"].astype(str)
+    ts = t["nh4_truth_summary.csv"].set_index("key")["value"]
+    cons = t["nh4_truth_w2_consistency.csv"].set_index("checkpoint")
+    h = alkalinity.headline(t["alkalinity_bound.csv"])
+    dosed = float(t["alkalinity_bound.csv"]["dosed_total_mgN_L"].iloc[0])
+    n15 = float(h.loc[h["alk0_meq_L"] == h["alk0_meq_L"].max(), "n_nit_max_end_mgN_L"].iloc[0])
+    n5 = float(h.loc[h["alk0_meq_L"] == 5.0, "n_nit_max_end_mgN_L"].iloc[0]) if (h["alk0_meq_L"] == 5.0).any() else np.nan
+    fa_lo = float(h["fa_residual_min_end_mgNH3_L"].min())
+    fa_hi = float(h["fa_residual_min_end_mgNH3_L"].max())
+    end = cons.loc["end"]
+
+    def val(metric):
+        r = pm[pm["metric"] == metric].set_index("pulse")
+        return {int(k): (float(x) if s == "computed" else None) for k, x, s in zip(r.index, r["value"], r["status"])}
+
+    eta, relax = val("eta_conversion_fraction"), val("relaxation_time_over_pulse_interval")
+    saes = sorted(float(x) for x in cfg.get("scenarios.sae_field_kgO2_per_kWh"))
+    klas = sorted(float(x) for x in cfg.get("scenarios.kLa_O2_per_d"))
+    s_mid, k_mid = saes[len(saes) // 2], klas[len(klas) // 2]
+    sup = val(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{s_mid:g}_kLa{k_mid:g}_T25C")
+    idle = val("idle_fraction_of_stirred_time")
+    fmt_d = lambda dct, f="{:.2f}": ", ".join(f"P{k} " + (f.format(x) if x is not None else "n.c.") for k, x in dct.items())
+    fr = t["states_fractions.csv"].set_index("interval")
+    whole = fr.loc["whole record"]
+    sc = t["states_comparison.csv"].set_index("comparison")
+    fit = t["model_fit.csv"]
+    sel = fit.loc[fit["selected"].astype(bool)].iloc[0]
+    alk_models = fit[fit["model"].astype(str).str.startswith("alkalinity")]
+    best_alk = alk_models.loc[alk_models["sel_rmse_log"].idxmin()] if len(alk_models) else None
+    vc = t["volume_constraints.csv"].set_index("constraint")
+    e_min = float(vc.loc["N conservation over every pulse", "value_mL_per_d"])
+    e_max = float(vc.loc[vc.index.str.startswith("liquid present"), "value_mL_per_d"].iloc[0])
+
+    def cmp_txt(name):
+        r = sc.loc[name]
+        if r["status"] == "computed":
+            return f"{r['diff']:+.2f} mg N/L/d (95 % block bootstrap {r['ci95_low']:+.2f} to {r['ci95_high']:+.2f})"
+        return f"{r['diff']:+.2f} mg N/L/d, interval not computed ({str(r['status']).removeprefix('not computed: ')})"
+
+    lines = [
+        ("1. **Only pH is a validated sensor.** pH: " + v["ph"] + f"; NH4 electrode: {v['nh4']}; conductivity: {v['ec']}; "
+         f"ORP: {v['orp']} (absolute E_H unusable, relative changes used with a stated assumption)."),
+        (f"2. **One NH4 truth.** Every NH4-derived number rests on C(t), the inversion of the M6 log observation model. Its "
+         f"level is not identifiable: {float(ts['C_inv_start_median_mgN_L']):.0f} mg N/L at day 1 (band "
+         f"{float(ts['C_inv_start_band_low_mgN_L']):.0f}-{float(ts['C_inv_start_band_high_mgN_L']):.0f}) and "
+         f"{float(ts['C_inv_end_median_mgN_L']):.0f} at day 47.9 (band {float(ts['C_inv_end_band_low_mgN_L']):.0f}-"
+         f"{float(ts['C_inv_end_band_high_mgN_L']):.0f}, open upward), against an electrode reading of "
+         f"{float(ts['reading_end_median_mgN_L']):.0f} mg N/L at the end."),
+        (f"3. **Alkalinity caps nitrification.** Nothing but NH4Cl was added, so nitrification (2 eq/mol N) is bounded by "
+         f"the initial alkalinity and the pH record: by day 47.9 at most {n5:.0f} mg N/L for Alk0 = 5 meq/L and "
+         f"{n15:.0f} mg N/L for 15 meq/L, against {dosed:.0f} mg N/L dosed. Unless Alk0 was high, most of the dose stayed "
+         f"as TAN, with free ammonia of at least {fa_lo:.1f}-{fa_hi:.1f} mg NH3/L at the end (SCENARIO 25 °C)."),
+        (f"4. **The inverted C(t) and the bound disagree (S2).** The best-fit C(t) implies "
+         f"{end['removed_per_initial_litre_mgN_L']:.0f} mg N/L removed by the end, which needs Alk0 ≥ "
+         f"{end['alk0_required_if_nitrified_meq_L']:.1f} meq/L if nitrified (scan 1-15). It is consistent only if the "
+         f"true level lies in the open upper part of the band (≥ {end['alk0_required_if_nitrified_band_min_meq_L']:.1f} "
+         f"meq/L there), if Alk0 exceeds 15 meq/L, or if a sink releasing 1 eq/mol N (NH3 stripping from the open, "
+         f"stirred vessel; ≥ {end['alk0_required_any_proton_sink_meq_L']:.1f} meq/L) took part. Every C(t)-derived "
+         "number from pulse 2 on is therefore QUALIFIED (`w2_bound_check`)."),
+        (f"5. **Conversion per pulse and relaxation.** η = {fmt_d(eta)} (fraction of each dose removed before the "
+         "next; n.c. = not computed, e.g. a negative removal on C(t)). The time to remove one dose at the post-pulse "
+         f"rate, relative to the pulse interval, was {fmt_d(relax, '{:.1f}')}"
+         + ("; every dose arrived before the previous one could be removed at that rate, so TAN accumulated and the "
+            "batch was driven away from its inactive reference." if relax and all(x is not None and x > 1
+                                                                                     for x in relax.values()) else ".")),
+        (f"6. **Process state.** Pre-registered rules give a state to {100 * whole['classified_fraction']:.0f} % of the "
+         f"record ({100 * whole['fraction_active_nitrification']:.0f} % active nitrification, "
+         f"{100 * whole['fraction_inactive_oversupplied']:.0f} % inactive and over-supplied, "
+         f"{100 * whole['fraction_oxygen_limited']:.0f} % oxygen-limited); the rest is sensor artifact "
+         f"({100 * whole['fraction_sensor_artifact']:.0f} %, mostly held NH4 output) or unclassified "
+         f"({100 * whole['fraction_unclassified']:.0f} %, much of it a C(t) that rises without an N source). Between "
+         f"NH4-free indicator groups, NH4 consumption differs by: pH rising vs not {cmp_txt('pH rising vs not rising (within pulse intervals)')}; "
+         f"ORP low vs high {cmp_txt('ORP_rel low vs high (within pulse intervals)')}. No indicator separates the "
+         "consumption reliably; these are associations, not causes."),
+        (f"7. **Mechanism.** The chronological split selects **{sel['model']}** (selection skill "
+         f"{float(sel['sel_skill_vs_null']):.3f}, test skill {float(sel['test_skill_vs_null']):.3f})"
+         + (f"; the best alkalinity-limited candidate (W5), {best_alk['model']}, scores "
+            f"{float(best_alk['sel_skill_vs_null']):.3f} on selection, {float(best_alk['test_skill_vs_null']):.3f} on test "
+            f"and {float(best_alk['forecast_skill_vs_null']):.3f} on the pure forecast (selected model: "
+            f"{float(sel['forecast_skill_vs_null']):.3f})" + (
+                ", better out of sample than the selected model, so the data do not discriminate activity decay from "
+                "substrate-side (alkalinity) limitation" if float(best_alk['test_skill_vs_null']) > float(sel['test_skill_vs_null'])
+                else "") if best_alk is not None else "")
+         + ". With four pulses, time is confounded with activity decay, alkalinity loss, FA and electrode drift."),
+        (f"8. **Energy and efficiency.** The transferable energy measure is oxygen: 4.57 g O2 per g N removed, i.e. a "
+         f"floor of {4.57 / max(saes):.2f}-{4.57 / min(saes):.2f} kWh/kg N at field aeration efficiencies of "
+         f"{max(saes):g}-{min(saes):g} kg O2/kWh (SCENARIO). With aeration sized to kLa_O2 = {k_mid:g} 1/d (SCENARIO) "
+         f"and SAE = {s_mid:g}, the energy per kg N removed is {fmt_d(sup, '{:.1f}')} kWh; the idle fraction of stirred "
+         f"time is {fmt_d(idle)} (Fig. 8; QUALIFIED from pulse 2 on)."),
+        (f"9. **The closed frame is not established.** Conditional on C(t), N conservation over pulse 3 needs a net water "
+         f"loss of at least {e_min:.2f} mL/d; liquid was present at the end, so the loss was below {e_max:.2f} mL/d. "
+         "Vessel masses would settle it."),
+    ]
+    return lines
+
+
+def assemble_report(cfg, out_dir) -> Path:
+    from . import alkalinity, figures
+    from .dynamics import onsager_conclusion
+
+    out_dir = Path(out_dir)
+    tables = out_dir / "tables"
+    names = [n for n in TABLE_DESCRIPTIONS if n != "all_references.csv"]
+    t = {n: _read(tables, n) for n in names}
+    t["dynamics_windows.csv"] = _read(tables, "dynamics_windows.csv")
+    check_required(t)  # raises before anything is written
+    refs = all_references(tables)
+    figures.make_all(cfg, t, out_dir)
+    for fig, _ in FIGURES:
+        if not (out_dir / "figures" / fig).is_file():
+            raise FileNotFoundError(f"{out_dir / 'figures' / fig} missing")
+    refs.to_csv(tables / "all_references.csv", index=False)
+    labels = status_labels(t)
+    pv = t["sensor_validation.csv"]
+    verdicts = t["sensor_verdicts.csv"][["sensor", "verdict", "criterion"]]
+    vessel, pulses, sensors = cfg.raw["vessel"], cfg.raw["pulses"], cfg.raw["sensors"]
+    index = pd.DataFrame([(n, TABLE_DESCRIPTIONS[n], len(t[n]) if n in t else len(refs)) for n in TABLE_DESCRIPTIONS],
+                         columns=["table (outputs/tables/)", "content", "rows"])
+    dp = t["data_properties.csv"][["sensor", "file", "rows_valid", "rows_dropped", "t_min_d", "t_max_d", "value_min",
+                                   "value_max", "interval_median_s"]]
+    pm = t["pulses.csv"]
+    fig = {f: f"![{c}](../figures/{f})\n\n*{c}*\n" for f, c in FIGURES}
+    sc = cfg.raw["scenarios"]
+    fit = t["model_fit.csv"]
+    lines = [
+        "# Non-equilibrium analysis of an NH4Cl-pulsed nitrifying batch",
+        "",
+        ("Generated by `python -m bnr_neq run-all` (report stage) from the raw files in `data/`. Do not edit by hand. "
+         "Implementer's report, not an approval. Labels: SCENARIO = assumed value with its range; MODEL-BASED = from "
+         "the selected M6 rate law; SENSITIVITY = an alternative NH4 observation model kept for comparison; QUALIFIED = "
+         "derived from a C(t) that contradicts the W2 alkalinity bound."),
+        "",
+        "## 1. What the data say about the process",
+        "",
+        *[x + "\n" for x in summary_lines(cfg, t)],
+        fig["fig1_linkage.png"],
+        "## 2. Energy and efficiency",
+        "",
+        (f"The metric family per pulse (constant volume; all rows with inputs and status in `pulses.csv`). SCENARIO "
+         f"ranges: kLa_O2 = {', '.join(f'{x:g}' for x in sc['kLa_O2_per_d'])} 1/d (not measured); field aeration "
+         f"efficiency SAE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (process-water AE at "
+         "about 2 mg/L DO, not the clean-water standard SAE; fine pore: 3.6-4.8 in clean water against 0.7-2.6 in "
+         "process water), source: "
+         f"{sc['sae_source']}. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
+         "lower bound and the supply-based energy an upper bound. The demand-based energy (4.57/SAE kWh/kg N) is the "
+         "floor that any aeration system must spend on the N actually removed; the supply-based value adds the aeration "
+         "spent while the biomass was idle. The stirrer power is a laboratory-specific term (not measured, "
+         "`stirrer_power_W` missing)."),
+        "",
+        md_table(energy_table(pm), digits=3),
+        "",
+        fig["fig8_efficiency.png"],
+        "## 3. Process state and the constraints on conversion",
+        "",
+        "### Process states (W3)",
+        "",
+        md_table(t["states_rules.csv"][["state", "condition", "features"]], digits=3),
+        "",
+        md_table(t["states_fractions.csv"].drop(columns=["status"]), digits=2),
+        "",
+        md_table(t["states_comparison.csv"][["comparison", "role", "diff", "ci95_low", "ci95_high", "n_a", "n_b",
+                                              "block_bins", "status"]], digits=3),
+        "",
+        "### Alkalinity bound (W2) and the inverted C(t) (S2)",
+        "",
+        (f"Air-equilibrium CO2 (conservative), constant volume, SCENARIO 25 °C. Alk0 source: "
+         f"{alkalinity.alk0_source(cfg)}. Temperature, CO2-transfer and volume scenarios: `alkalinity_bound.csv`, "
+         "`alkalinity.md`."),
+        "",
+        md_table(alkalinity.headline(t["alkalinity_bound.csv"])[["alk0_meq_L", "consistent_with_pH_record",
+                                                                  "n_nit_max_end_mgN_L", "n_nit_max_fraction_of_dose",
+                                                                  "n_removed_max_any_proton_sink_end_mgN_L",
+                                                                  "tan_residual_min_end_mgN_L",
+                                                                  "fa_residual_min_end_mgNH3_L"]], digits=3),
+        "",
+        md_table(t["nh4_truth_w2_consistency.csv"].drop(columns=["alk0_scan_max_meq_L"]), digits=3),
+        "",
+        fig["fig4_constraints.png"],
+        "### Water volume (W8)",
+        "",
+        md_table(t["volume_constraints.csv"], digits=3),
+        "",
+        "## 4. Reduced model and mechanism (M6, W5)",
+        "",
+        md_table(fit[["model", "n_params_calibration", "sel_rmse_log", "test_rmse_log", "sel_skill_vs_null",
+                      "test_skill_vs_null", "forecast_skill_vs_null", "selected"]], digits=3),
+        "",
+        "Consistency checks of the selected model (true by construction where noted; not findings):",
+        "",
+        md_table(t["model_checks.csv"], digits=3),
+        "",
+        md_table(t["model_identifiability.csv"][["parameter", "estimate", "ci95_low", "ci95_high", "identifiable"]],
+                 digits=3),
+        "",
+        fig["fig6_model.png"],
+        "## 5. Sensor validity",
+        "",
+        "From `sensor_verdicts.csv` (criteria fixed before computing the observations):",
+        "",
+        md_table(verdicts),
+        "",
+        md_table(pv[["pulse", "nh4_obs_change_mgNH4_L", "nh4_response_fraction", "ec_obs_change_mS_cm",
+                     "orp_obs_change_mV", "ph_obs_change"]], digits=3),
+        "",
+        fig["fig3_sensor_validation.png"],
+        fig["fig2_overview.png"],
+        "## 6. Status of the conclusions",
+        "",
+        md_table(labels),
+        "",
+        "## 7. Experimental facts and stated assumptions",
+        "",
+        (f"- Batch of {vessel['volume_L'] * 1e3:g} mL, open to air: {vessel['open_to_air']}, {vessel['stirring']} stirring, "
+         "no forced aeration."),
+        (f"- Additions: {pulses['mass_mg']:g} mg {pulses['salt']} at days {', '.join(f'{x:g}' for x in pulses['times_d'])} "
+         "(logger clock); nothing else added or removed."),
+        (f"- NH4 electrode in {sensors['nh4_unit']}, factor {sensors['nh4_to_N_factor']} to mg N/L; ORP "
+         f"{sensors['orp_working']} vs {sensors['orp_reference']}."),
+        f"- Missing measurements: {', '.join(cfg.missing_keys)}.",
+        "",
+        *[f"{i}. {a}" for i, a in enumerate(assumptions(cfg, t), start=1)],
+        "",
+        "## Supplement S1. Stochastic-thermodynamic and information-theoretic estimators (M5)",
+        "",
+        ("Demoted from the main analysis (R6): the pH record is highly tied, few windows are stationary and the NH4 "
+         "sub-stamp times are reconstructed, so these indices do not connect to rate, energy or efficiency."),
+        "",
+        md_table(t["dynamics.csv"][["series", "role", "segment", "n_windows", "n_stationary", "tie_fraction_median",
+                                    "ordinal_kl_windows", "ordinal_kl_significant_windows",
+                                    "asym_norm_lag1_significant_windows", "hvg_kl_significant_windows"]], digits=3),
+        "",
+        md_table(t["dynamics_onsager.csv"][["pulse", "pulse_response", "fluctuation_sd", "snr_pulse_response",
+                                            "late_window_stationary", "verdict"]], digits=3),
+        "",
+        onsager_conclusion(t["dynamics_onsager.csv"]),
+        "",
+        fig["fig5_dynamics.png"],
+        "## Supplement S2. Detailed tables",
+        "",
+        "### Verified data properties",
+        "",
+        md_table(dp, digits=6),
+        "",
+        "### Consumption slopes on the electrode reading (M3; gain-corrected and reading-as-TAN columns are SENSITIVITY)",
+        "",
+        md_table(t["segments.csv"][["sub_segment", "fit_start_d", "fit_end_d", "start_boundary", "slope_mgNH4_L_d",
+                                    "held_fraction", "consumption_gain_corrected_mgN_L_d", "status"]], digits=3),
+        "",
+        "### Slope windows of the inverted C(t) (W1)",
+        "",
+        md_table(t["nh4_truth_windows.csv"][["sub_segment", "governing_pulse", "fit_start_d", "fit_end_d",
+                                             "median_C_inv_mgN_L", "consumption_mgN_L_d", "consumption_ci95_low_mgN_L_d",
+                                             "consumption_ci95_high_mgN_L_d", "fa_median_mgNH3_L_SCENARIO_T25C",
+                                             "o2_demand_mgO2_L_d", "status"]], digits=3),
+        "",
+        "### Thermodynamics and balances (M4)",
+        "",
+        md_table(t["thermo_affinity_steps.csv"].drop(columns=["note"]), digits=3),
+        "",
+        md_table(t["balance_nitrogen.csv"], digits=4),
+        "",
+        md_table(t["balance_alkalinity.csv"], digits=4),
+        "",
+        "### Pulse-level descriptors (M7)",
+        "",
+        fig["fig7_pulses.png"],
+        md_table(t["pulses_associations.csv"], digits=3),
+        "",
+        "### Reference values",
+        "",
+        (f"{int(refs['pass'].sum())} of {len(refs)} reproduced within tolerance; the others are explained in "
+         "`docs/progress.md` and in each milestone report. They are regression checks against the preliminary analysis, "
+         "not external validation."),
+        "",
+        md_table(refs, digits=4),
+        "",
+        "### Every table",
+        "",
+        md_table(index),
+        "",
+        ("Milestone reports in `outputs/reports/`: `ingest.md`, `sensor_validation.md`, `segments.md`, `thermo.md`, "
+         "`alkalinity.md`, `dynamics.md`, `model.md`, `states.md`, `pulses.md`."),
+    ]
+    path = out_dir / "reports" / "analysis_report.md"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path

@@ -1,0 +1,5 @@
+sensor,samples_in_grid,samples_outside_grid,empty_bins,bins_with_gap,min_samples_per_nonempty_bin
+cond,69196,2563,0,0,14
+nh4,414512,273,0,0,22
+orp,413986,45898,0,0,43
+ph,414027,730,0,0,84

@@ -1,0 +1,12 @@
+constraint,bound,value_mL_per_d,band_low_mL_per_d,band_high_mL_per_d,basis
+N conservation over pulse 1 (8.53-10.57 d),lower,0.0,0.0,0.0,CONDITIONAL on the M6-inverted C(t): smallest net loss for which the amount balance removes N ≥ 0 (no N source)
+N conservation over pulse 2 (10.57-24.59 d),lower,0.0,0.0,0.0,CONDITIONAL on the M6-inverted C(t): smallest net loss for which the amount balance removes N ≥ 0 (no N source)
+N conservation over pulse 3 (24.59-32.39 d),lower,0.3135196275186642,0.0,0.4525857524600509,CONDITIONAL on the M6-inverted C(t): smallest net loss for which the amount balance removes N ≥ 0 (no N source)
+N conservation over pulse 4 (32.39-47.92 d),lower,0.0,0.0,0.0,CONDITIONAL on the M6-inverted C(t): smallest net loss for which the amount balance removes N ≥ 0 (no N source)
+N conservation over every pulse,lower,0.3135196275186642,0.0,0.4525857524600509,CONDITIONAL on the M6-inverted C(t): max over the pulses
+liquid present at the last sensor reading,upper,2.0868113522537564,,,experimental facts: V0 / 47.92 d (nothing else was added)
+flat conductivity record (1.069 to 1.089 mS/cm),upper,0.039871860126978215,,,"CONDITIONAL on the conductivity probe measuring solution conductivity, which M2 rejected (no response to the pulses); computed (CONDITIONAL; not used: the probe failed M2)"
+scenario check: constant volume (closed-frame assumption),scenario,0.0,,,INCONSISTENT with the constraints: net loss 0 mL/d < N-conservation minimum 0.314 and < liquid-present maximum 2.09 mL/d (the N-conservation constraint is CONDITIONAL on C(t))
+scenario check: SCENARIO evaporation 0.25 mL/d,scenario,0.25,,,INCONSISTENT with the constraints: net loss 0.25 mL/d < N-conservation minimum 0.314 and < liquid-present maximum 2.09 mL/d (the N-conservation constraint is CONDITIONAL on C(t))
+scenario check: SCENARIO evaporation 0.5 mL/d,scenario,0.5,,,consistent with the constraints: net loss 0.5 mL/d ≥ N-conservation minimum 0.314 and < liquid-present maximum 2.09 mL/d (the N-conservation constraint is CONDITIONAL on C(t))
+scenario check: SCENARIO evaporation 1 mL/d,scenario,1.0,,,consistent with the constraints: net loss 1 mL/d ≥ N-conservation minimum 0.314 and < liquid-present maximum 2.09 mL/d (the N-conservation constraint is CONDITIONAL on C(t))

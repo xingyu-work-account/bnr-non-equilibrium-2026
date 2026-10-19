@@ -1,0 +1,6 @@
+response,descriptor,n,spearman_rho,status,note
+consumption_weighted_mgN_L_d,delta_A_kJ_mol_SCENARIO_T25C,4,1.0,EXPLORATORY (n = 4 pulses),no p-value: with 4 pulses the smallest attainable two-sided p is 0.083
+consumption_weighted_mgN_L_d,fa_median_mgNH3_L_SCENARIO_T20C,4,-0.7999999999999999,EXPLORATORY (n = 4 pulses),no p-value: with 4 pulses the smallest attainable two-sided p is 0.083
+consumption_weighted_mgN_L_d,fa_median_mgNH3_L_SCENARIO_T25C,4,-0.7999999999999999,EXPLORATORY (n = 4 pulses),no p-value: with 4 pulses the smallest attainable two-sided p is 0.083
+consumption_weighted_mgN_L_d,median_pH,4,-0.39999999999999997,EXPLORATORY (n = 4 pulses),no p-value: with 4 pulses the smallest attainable two-sided p is 0.083
+consumption_weighted_mgN_L_d,t_pulse_d,4,-1.0,EXPLORATORY (n = 4 pulses),no p-value: with 4 pulses the smallest attainable two-sided p is 0.083

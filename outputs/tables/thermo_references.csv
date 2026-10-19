@@ -1,0 +1,12 @@
+quantity,reference,obtained,tolerance,abs_diff,pass,note
+"delta_A_kJ_mol pulse 1 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",4.2,4.17219224313269,0.1,0.027807756867310296,True,
+"delta_A_kJ_mol pulse 2 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",2.5,2.471484756790058,0.1,0.02851524320994203,True,
+"delta_A_kJ_mol pulse 3 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",3.1,3.1375853322769736,0.1,0.03758533227697347,True,
+"delta_A_kJ_mol pulse 4 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",2.4,2.3646973791794315,0.1,0.03530262082056845,True,
+coexistence affinity kJ/mol (documented SCENARIO),317.0,316.8948979518364,2.0,0.10510204816358737,True,
+HCO3- air-equilibrium mmol/L at pH 7.3,0.127,0.12683797225688473,0.001,0.0001620277431152728,True,
+HCO3- air-equilibrium mmol/L at pH 7.8,0.401,0.40109688612900324,0.001,9.688612900321525e-05,True,
+O2 demand min mg O2/L/d (GAIN-CORRECTED),6.0,5.763434415914505,0.6,0.23656558408549522,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+O2 demand max mg O2/L/d (GAIN-CORRECTED),33.0,77.52693433702237,3.3,44.52693433702237,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+kLa required min 1/d,0.7,0.6977523505949764,0.07,0.002247649405023533,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+kLa required max 1/d,4.0,9.385827401576558,0.4,5.385827401576558,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption

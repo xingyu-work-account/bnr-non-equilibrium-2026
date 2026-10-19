@@ -1,0 +1,18 @@
+key,value
+nh4_truth_id,C_inv:58628090efe8
+nh4_observation_model,M6_log
+model,biomass_decay
+inversion,"quasi-static inversion C = exp((log R − a − offsets)/b(t)) of the 0.01 d grid reading; the sensor lag τ is not inverted (slopes after ~3τ are unaffected, window starts within 3τ of a boundary carry the lag transient)"
+n_vectors_in_band,86
+band_basis,envelope of the whole-record refit and every converged profile vector with Δ ≤ 3.84
+band_low_open,False
+band_high_open,True
+open_reason,parameter C0_mgN_L: profile open on the high side moves C(t) up; parameter a: profile open on the low side moves C(t) up
+C_inv_start_median_mgN_L,177.11509739369964
+C_inv_start_band_low_mgN_L,75.47559103864018
+C_inv_start_band_high_mgN_L,281.6658694451919
+C_inv_end_median_mgN_L,293.79892970575975
+C_inv_end_band_low_mgN_L,182.30890891849052
+C_inv_end_band_high_mgN_L,357.397594315071
+reading_start_median_mgN_L,35.41923019186047
+reading_end_median_mgN_L,33.143196598416665

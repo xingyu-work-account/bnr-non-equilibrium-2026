@@ -1,0 +1,32 @@
+quantity,pulse,reference,obtained,tolerance,unit,abs_diff,pass,note
+nh4_response_fraction_pct,1,37.0,37.04249526026941,3.0,%,0.04249526026941197,True,
+nh4_response_fraction_pct,2,29.0,29.000608681190755,3.0,%,0.0006086811907550782,True,
+nh4_response_fraction_pct,3,26.0,26.17764554576196,3.0,%,0.17764554576195835,True,
+nh4_response_fraction_pct,4,17.0,17.43594877764843,3.0,%,0.43594877764843076,True,
+nh4_obs_change_mgNH4_L,1,31.1,31.23,2.0,mg NH4+/L,0.129999999999999,True,
+nh4_obs_change_mgNH4_L,2,24.4,24.450000000000003,2.0,mg NH4+/L,0.05000000000000426,True,
+nh4_obs_change_mgNH4_L,3,22.1,22.07,2.0,mg NH4+/L,0.030000000000001137,True,
+nh4_obs_change_mgNH4_L,4,14.7,14.700000000000003,2.0,mg NH4+/L,3.552713678800501e-15,True,
+ec_obs_change_mS_cm,1,0.005,0.005159418999999943,0.01,mS/cm,0.0001594189999999428,True,
+ec_obs_change_mS_cm,2,-0.062,-0.060579695000000156,0.01,mS/cm,0.001420304999999844,True,
+ec_obs_change_mS_cm,3,-0.007,-0.006666665000000016,0.01,mS/cm,0.0003333349999999841,True,
+ec_obs_change_mS_cm,4,0.016,0.016376807500000035,0.01,mS/cm,0.00037680750000003427,True,
+orp_obs_change_mV,1,0.4,0.4000000000000057,0.5,mV,5.662137425588298e-15,True,
+orp_obs_change_mV,2,0.0,0.0,0.5,mV,0.0,True,
+orp_obs_change_mV,3,0.1,0.125,0.5,mV,0.024999999999999994,True,
+orp_obs_change_mV,4,0.2,0.20999999999997954,0.5,mV,0.009999999999979525,True,
+ph_obs_change,1,-0.01,-0.009999999999999787,0.02,pH,2.1337098754514727e-16,True,
+ph_obs_change,2,0.02,0.019999999999999574,0.02,pH,4.2674197509029455e-16,True,
+ph_obs_change,3,0.0,0.0,0.02,pH,0.0,True,
+ph_obs_change,4,0.04,0.040000000000000036,0.02,pH,3.469446951953614e-17,True,
+ec_median_day_0.3_1.3_mS_cm,,1.069,1.068985805,0.005,mS/cm,1.4194999999883606e-05,True,
+ec_median_day_48.5_49.6_mS_cm,,1.071,1.07101479,0.005,mS/cm,1.479000000004227e-05,True,
+nh4_median_start_mgNH4_L,,47.1,47.02,0.5,mg NH4+/L,0.0799999999999983,True,
+nh4_median_end_mgNH4_L,,43.1,43.13,0.5,mg NH4+/L,0.030000000000001137,True,
+nh4_offset_jump_day,,2.59,2.625581395348837,0.02,d,0.03558139534883731,False,nearest detected offset; detector run onset 2.600 d
+nh4_offset_jump_day,,17.84,17.875227272727273,0.02,d,0.03522727272727266,False,nearest detected offset; detector run onset 17.850 d
+nh4_offset_jump_day,,37.19,37.21906976744186,0.02,d,0.02906976744186096,False,nearest detected offset; detector run onset 37.194 d
+nh4_offset_jump_day,,44.63,44.66023333333333,0.02,d,0.030233333333328005,False,nearest detected offset; detector run onset 44.636 d
+nh4_delayed_response_day_pulse1,1,8.85,8.858372093023256,0.02,d,0.008372093023256255,True,largest response to pulse 1; lag 7.88 h
+nh4_delayed_response_day_pulse2,2,10.88,10.88318181818182,0.02,d,0.0031818181818188407,True,largest response to pulse 2; lag 7.52 h
+ec_late_pulse_count,,29.0,29.0,3.0,count,0.0,True,median decay 23.1 min (reference about 24 min)

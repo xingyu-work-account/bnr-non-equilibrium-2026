@@ -1,0 +1,5 @@
+key,sensor,verdict,criterion
+nh4,NH4+ electrode,"FAIL: under-response, 17 to 37% of the dose",observed/predicted step within 0.8 to 1.2 for every pulse
+ec,Conductivity,FAIL: no response to the pulses,observed step ≥ 0.5 x limiting Kohlrausch prediction
+orp,ORP (Pt vs bare Ag),FAIL: no chloride response at the bare Ag,observed rise ≥ 0.5 x smallest chloride-scenario prediction
+ph,pH,PASS (no contradiction),abs(ΔpH) ≤ 0.05; quantitative prediction not computed: alkalinity_mmol_L missing

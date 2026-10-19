@@ -1,0 +1,11 @@
+plane,segment,from_d,to_d,n_input_windows,n_stationary_input_windows,circulation,ci_low,ci_high,n_increments,significant
+pH-ORP,0,1.0,8.53,1,0,not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS),,,,
+pH-ORP,1,8.53,10.57,1,0,not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS),,,,
+pH-ORP,2,10.57,24.59,1,0,not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS),,,,
+pH-ORP,3,24.59,32.39,3,1,0.01381357186244088,-0.011567657446689722,0.029791157371282195,424.0,False
+pH-ORP,4,32.39,47.92,1,0,not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS),,,,
+pH-NH4,0,1.0,8.53,2,0,not computed: fewer than 100 increments in stationary input windows (0 of 2 windows pass ADF/KPSS),,,,
+pH-NH4,1,8.53,10.57,2,0,not computed: fewer than 100 increments in stationary input windows (0 of 2 windows pass ADF/KPSS),,,,
+pH-NH4,2,10.57,24.59,3,2,-0.02083561278420496,-0.04479233357175513,-0.002825261580734033,469.0,True
+pH-NH4,3,24.59,32.39,1,0,not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS),,,,
+pH-NH4,4,32.39,47.92,3,1,-0.00813775289346541,-0.033076348219121254,0.03464345002823778,314.0,False

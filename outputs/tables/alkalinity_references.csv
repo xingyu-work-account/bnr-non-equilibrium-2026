@@ -1,0 +1,9 @@
+quantity,reference,obtained,tolerance,abs_diff,pass
+"N_nit bound, Alk0 2 meq/L, pH floor ignored (mg N/L)",14.0,14.007,0.1,0.006999999999999673,True
+"N_nit bound, Alk0 5 meq/L, pH floor ignored (mg N/L)",35.0,35.0175,0.1,0.017499999999998295,True
+"N_nit bound, Alk0 10 meq/L, pH floor ignored (mg N/L)",70.0,70.035,0.1,0.03499999999999659,True
+"air-equilibrium HCO3- at pH 7.8, 25 °C (mmol/L)",0.401,0.40127790626504195,0.001,0.0002779062650419273,True
+"air-equilibrium HCO3- at pH 8, 25 °C (mmol/L)",0.636,0.635982621924514,0.001,1.737807548596315e-05,True
+"FA at 200 mg N/L TAN, pH 7.8, 25 °C (mg NH3/L)",8.5,8.492321732418432,0.1,0.007678267581567866,True
+pK1 at 25 °C (Plummer-Busenberg vs constants.py),6.35,6.351864150163479,0.01,0.0018641501634792945,True
+log10 K_H at 25 °C (Plummer-Busenberg vs constants.py),-1.47,-1.4679398914183999,0.01,0.0020601085816001063,True

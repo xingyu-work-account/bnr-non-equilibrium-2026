@@ -1,0 +1,14 @@
+quantity,value,unit,basis,definition
+ec_median_day_0.3_1.3_mS_cm,1.068985805,mS/cm,measured,"median EC, day 0.3 to 1.3"
+ec_median_day_48.5_49.6_mS_cm,1.07101479,mS/cm,measured,"median EC, day 48.5 to 49.6 (Cond only, outside common window)"
+ec_pred_end_no_nitrification_mS_cm_limiting_SCENARIO_T25C,3.8694569122890767,mS/cm,predicted,"EC start + 4 x 0.700 (limiting values, SCENARIO 25 °C)"
+ec_pred_end_complete_nitrification_mS_cm_limiting_SCENARIO_T25C,2.1663666728095383,mS/cm,predicted,"EC start + 4 x 0.274 (limiting values, SCENARIO 25 °C)"
+nh4_median_start_mgNH4_L,47.02,mg NH4+/L,measured,"median NH4, day 0.3 to 1.3"
+nh4_median_end_mgNH4_L,43.13,mg NH4+/L,measured,"median NH4, day 46.9 to 47.9"
+nh4_median_start_mgN_L,36.5105598,mg N/L,measured,start median x N factor
+nh4_median_end_mgN_L,33.490013700000006,mg N/L,measured,end median x N factor
+n_added_mgN_L,261.8571348451141,mg N/L,known dose,4 x 65.46
+n_removed_from_nh4_pool_mgN_L,264.8776809451141,mg N/L,derived,"start + added - end (electrode values, uncorrected)"
+balance_interval_d,46.6,d,derived,midpoint of end window - midpoint of start window
+implied_n_removal_rate_mgN_L_d,5.684070406547512,mg N/L/d,derived,removed / interval
+chloride_added_mmol_L,18.694733693518536,mmol/L,known dose,conservative; staircase of equal steps

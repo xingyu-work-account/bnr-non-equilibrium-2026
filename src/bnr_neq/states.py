@@ -1,0 +1,487 @@
+"""Process states from relative ORP, pH and the inverted NH4 (W3).
+
+Every 0.01 d grid bin from day 1 is assigned one of
+
+- ``active_nitrification``: the inverted NH4 C(t) (W1) falls and pH does not rise (acid production possible);
+- ``inactive_oversupplied``: NH4 is available but not consumed while the redox level is high or pH rises (O2 present,
+  CO2 stripped without acid production): stirring or aeration spent without conversion;
+- ``oxygen_limited``: NH4 is available but not consumed while the redox level is low and neither ORP nor pH rises;
+- ``sensor_artifact``: the bin lies in a pulse transient, an NH4 step region, held/damped NH4 output, an ORP electrode
+  event or an empty bin; such bins carry **no process state**;
+- ``unclassified``: a slope window crosses an artifact or event, or the indicators conflict or stay inside thresholds.
+
+The rules, windows and thresholds below were fixed from sensor resolution and physical scales before any state was
+computed or compared (``RULES``, ``rules_table``); they are not tuned on the outcome. The classification uses the NH4
+slope, so comparing NH4 consumption between full states is circular. The association test therefore partitions the
+bins by ORP and pH alone (``INDICATOR_PARTITIONS``) and compares the NH4 consumption between those groups with
+moving-block bootstrap intervals whose block length covers the slope window and the autocorrelation of the response.
+Associations are not causes: time, pulse number and electrode state are confounded with every indicator.
+"""
+
+from __future__ import annotations
+
+import itertools
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy.stats import theilslopes
+
+from . import segments as S
+from .config import Config
+from .constants import F_C_PER_MOL, R_J_PER_MOL_K, T_REF_K
+
+T0_D = 1.0  # start-up excluded, as in M3 and M6
+END_D = 47.92
+BIN_D = 0.01
+SLOPE_HALF_BINS = 50  # centred 1.01 d window: one pH quantum (0.01) per day is resolvable over it
+PH_QUANTUM = 0.01  # pH logger resolution (tie fractions 0.82-0.96 in M1)
+# Relative ORP threshold: one decade of p_O2 moves a Nernstian 4-electron O2/H2O couple by RT ln10/(4F) ≈ 14.8 mV at
+# 25 °C (SCENARIO temperature). Rounded to 15 mV. Pt in water is not strictly Nernstian; this only fixes the scale.
+ORP_LEVEL_MV = round(1e3 * R_J_PER_MOL_K * T_REF_K * math.log(10) / (4 * F_C_PER_MOL))
+ORP_REF_HALF_BINS = 250  # centred 5 d reference median: relative level, insensitive to slow reference drift
+ORP_REF_MIN_BINS = 100
+ORP_EVENTS_D = (28.89, 30.48)  # dynamics.ORP_ELECTRODE_EVENTS_D (implementation_prompt.md M5 item 3)
+ORP_EVENT_MARGIN_D = (0.05, 0.1)
+CI_ALPHA = 0.95
+N_BOOT = 999
+MIN_BLOCKS_PER_GROUP = 2  # a block bootstrap needs each group to span at least two blocks' worth of bins
+SEED = 20261019
+
+STATES = ("active_nitrification", "inactive_oversupplied", "oxygen_limited")
+ARTIFACT, UNCLASSIFIED = "sensor_artifact", "unclassified"
+
+
+class StateRuleError(ValueError):
+    """A state rule uses a sensor feature that the sensor validation excluded."""
+
+
+# --- Pre-registered rules --------------------------------------------------------------------------------------
+# Features: nh4_inverted = slope of the W1 C(t) (the observation model absorbs the electrode under-response);
+# ph = pH slope (pH PASSED M2); orp_relative = ORP minus its centred 5 d median and the ORP slope (the M2 failure
+# concerns the bare-Ag reference potential: absolute E_H is excluded, relative changes over days are kept as an
+# ASSUMPTION of a slowly varying reference). Raw NH4 readings, absolute ORP and conductivity are not used.
+@dataclass(frozen=True)
+class Rule:
+    state: str
+    condition: str
+    features: tuple[str, ...]
+
+
+RULES = (
+    Rule("active_nitrification", "NH4 slope 95 % interval < 0 and pH not rising", ("nh4_inverted", "ph")),
+    Rule("oxygen_limited", f"NH4 slope interval spans 0, ORP_rel ≤ −{ORP_LEVEL_MV} mV, ORP not rising, pH not rising",
+         ("nh4_inverted", "orp_relative", "ph")),
+    Rule("inactive_oversupplied", f"NH4 slope interval spans 0 and (ORP_rel ≥ +{ORP_LEVEL_MV} mV or pH rising), "
+         f"ORP_rel not ≤ −{ORP_LEVEL_MV} mV", ("nh4_inverted", "orp_relative", "ph")),
+)
+# A FAIL verdict of a sensor excludes these features (key = sensor key of sensor_verdicts.csv).
+EXCLUDED_BY_FAIL = {"nh4": ("nh4_reading",), "ec": ("ec",), "orp": ("orp_absolute",), "ph": ("ph",)}
+# NH4-free partitions for the association test (the NH4 consumption is the response).
+INDICATOR_PARTITIONS = {
+    "ORP_rel low vs high": ("orp_low", "orp_high"),
+    "pH rising vs not rising": ("ph_rising", "ph_not_rising"),
+}
+
+
+def excluded_features(verdicts: pd.DataFrame) -> set[str]:
+    out = set()
+    for key, verdict in zip(verdicts["key"], verdicts["verdict"].astype(str)):
+        if verdict.startswith("FAIL"):
+            out.update(EXCLUDED_BY_FAIL.get(key, ()))
+    return out
+
+
+def validate_rules(rules, excluded: set[str]) -> None:
+    """Raise :class:`StateRuleError` if a rule references an excluded sensor feature."""
+    bad = [(r.state, f) for r in rules for f in r.features if f in excluded]
+    if bad:
+        raise StateRuleError(f"state rules use excluded sensor features: {bad}")
+
+
+def rules_table(excluded: set[str]) -> pd.DataFrame:
+    rows = [{"state": r.state, "condition": r.condition, "features": ", ".join(r.features),
+             "order": i} for i, r in enumerate(RULES, start=1)]
+    rows.append({"state": ARTIFACT, "condition": "pulse transient (0.1 d), NH4 step region (to resume + 0.1 d), held/damped "
+                 "NH4, ORP electrode event, empty NH4/pH/ORP bin, before day 1", "features": "QC flags", "order": 0})
+    rows.append({"state": UNCLASSIFIED, "condition": "slope window crosses an artifact, NH4 rising (no N source), "
+                 "consumption with a rising pH, or no indicator beyond its threshold", "features": "-", "order": 99})
+    df = pd.DataFrame(rows).sort_values("order", kind="stable")
+    df["thresholds"] = (f"slope window {(2 * SLOPE_HALF_BINS + 1) * BIN_D:.2f} d (Theil-Sen {100 * CI_ALPHA:g} % interval); "
+                        f"pH rising/falling also needs |slope| x window ≥ {PH_QUANTUM} (one quantum); ORP_rel level "
+                        f"±{ORP_LEVEL_MV} mV against the centred {2 * ORP_REF_HALF_BINS * BIN_D:g} d median")
+    df["excluded_features"] = ", ".join(sorted(excluded)) or "none"
+    return df.drop(columns=["order"])
+
+
+# --- Artifact mask ----------------------------------------------------------------------------------------------
+def artifact_reasons(t_mid: np.ndarray, grid: pd.DataFrame, cfg: Config, jumps: pd.DataFrame,
+                     held: pd.DataFrame) -> np.ndarray:
+    """First applicable artifact reason per bin ('' for a clean bin)."""
+    reason = np.full(len(t_mid), "", dtype=object)
+
+    def mark(mask, why):
+        reason[(reason == "") & mask] = why
+
+    mark(t_mid < T0_D, "start-up (before day 1)")
+    for tp in cfg.pulse_times_d:
+        mark((t_mid >= tp) & (t_mid < tp + S.EXCLUDE_AFTER_BOUNDARY_D), "pulse transient")
+    if len(jumps):
+        bnd = S.boundaries(cfg.pulse_times_d, jumps, start=0.0, end=END_D)
+        cand = bnd[~bnd["kind"].astype(str).str.match(r"^(start|end|pulse \d+)$")]
+        for a, b in zip(cand["t_d"], cand["t_resume_d"]):
+            mark((t_mid >= a - BIN_D) & (t_mid < b + S.EXCLUDE_AFTER_BOUNDARY_D), "NH4 step region")
+    for a, b in zip(held["t_start_d"], held["t_end_d"]):
+        mark((t_mid >= a) & (t_mid < b), "NH4 held/damped output")
+    for te in ORP_EVENTS_D:
+        mark((t_mid >= te - ORP_EVENT_MARGIN_D[0]) & (t_mid < te + ORP_EVENT_MARGIN_D[1]), "ORP electrode event")
+    for key in ("nh4", "ph", "orp"):
+        mark(grid[f"empty_{key}"].to_numpy(dtype=bool), f"empty {key} bin")
+    return reason
+
+
+# --- Features ---------------------------------------------------------------------------------------------------
+def rolling_theil_sen(t: np.ndarray, y: np.ndarray, clean: np.ndarray, half: int = SLOPE_HALF_BINS):
+    """Theil-Sen slope and 95 % interval over the centred window of every bin whose window is wholly clean."""
+    n = len(t)
+    out = np.full((3, n), np.nan)
+    bad = np.concatenate([[0], np.cumsum(~clean | ~np.isfinite(y))])
+    for i in range(half, n - half):
+        if bad[i + half + 1] - bad[i - half] == 0:
+            r = theilslopes(y[i - half:i + half + 1], t[i - half:i + half + 1], alpha=CI_ALPHA)
+            out[:, i] = (r.slope, r.low_slope, r.high_slope)
+    return out
+
+
+def relative_orp(t: np.ndarray, orp: np.ndarray, clean: np.ndarray) -> np.ndarray:
+    """ORP minus its centred 5 d median, computed within the pieces between ORP electrode events."""
+    rel = np.full(len(t), np.nan)
+    cuts = [-np.inf, *ORP_EVENTS_D, np.inf]
+    for a, b in itertools.pairwise(cuts):
+        piece = (t >= a) & (t < b)
+        s = pd.Series(np.where(clean & piece, orp, np.nan))[piece]
+        ref = s.rolling(2 * ORP_REF_HALF_BINS + 1, center=True, min_periods=ORP_REF_MIN_BINS).median()
+        rel[piece] = (s - ref).to_numpy()
+    return rel
+
+
+def window_median(x: np.ndarray, valid: np.ndarray, half: int = SLOPE_HALF_BINS) -> np.ndarray:
+    """Median of x over the centred slope window where ``valid`` (a finite slope) holds; NaN elsewhere."""
+    m = pd.Series(x).rolling(2 * half + 1, center=True, min_periods=2 * half + 1).median().to_numpy()
+    return np.where(valid, m, np.nan)
+
+
+def sign_class(slope, lo, hi, min_abs: float = 0.0) -> np.ndarray:
+    """+1 rising, −1 falling, 0 flat, NaN where no slope; significance = interval excludes 0 and |slope| ≥ min_abs."""
+    out = np.where(np.isfinite(slope), 0.0, np.nan)
+    out[(lo > 0) & (np.abs(slope) >= min_abs)] = 1.0
+    out[(hi < 0) & (np.abs(slope) >= min_abs)] = -1.0
+    return out
+
+
+def features(grid: pd.DataFrame, truth: pd.DataFrame, reason: np.ndarray) -> pd.DataFrame:
+    g = grid.reset_index(drop=True)
+    t = g["t_mid_d"].to_numpy()
+    c = pd.Series(truth["C_inv_mgN_L"].to_numpy(), index=np.round(truth["t_d"].to_numpy(), 6))
+    c_inv = c.reindex(np.round(t, 6)).to_numpy()
+    clean = reason == ""
+    nh4 = rolling_theil_sen(t, c_inv, clean)
+    ph = rolling_theil_sen(t, g["pH"].to_numpy(), clean)
+    orp = rolling_theil_sen(t, g["orp_mV_vs_Ag"].to_numpy(), clean)
+    window_d = (2 * SLOPE_HALF_BINS) * BIN_D
+    rel = relative_orp(t, g["orp_mV_vs_Ag"].to_numpy(), clean)
+    valid = np.isfinite(nh4[0]) & np.isfinite(ph[0]) & np.isfinite(orp[0])
+    return pd.DataFrame({
+        "t_mid_d": t, "artifact_reason": reason, "C_inv_mgN_L": c_inv, "pH": g["pH"].to_numpy(),
+        "orp_mV_vs_Ag": g["orp_mV_vs_Ag"].to_numpy(),
+        "nh4_slope_mgN_L_d": nh4[0], "nh4_slope_ci95_low": nh4[1], "nh4_slope_ci95_high": nh4[2],
+        "ph_slope_per_d": ph[0], "ph_slope_ci95_low": ph[1], "ph_slope_ci95_high": ph[2],
+        "orp_slope_mV_d": orp[0], "orp_slope_ci95_low": orp[1], "orp_slope_ci95_high": orp[2],
+        "orp_rel_mV": rel, "orp_rel_window_median_mV": window_median(rel, valid),
+        "nh4_sign": sign_class(nh4[0], nh4[1], nh4[2]),
+        "ph_sign": sign_class(ph[0], ph[1], ph[2], PH_QUANTUM / window_d),
+        "orp_sign": sign_class(orp[0], orp[1], orp[2]),
+    })
+
+
+# --- Classification --------------------------------------------------------------------------------------------
+def classify(f: pd.DataFrame) -> pd.DataFrame:
+    """Apply the pre-registered rules, in order, to the feature table (adds ``state`` and ``state_reason``)."""
+    n = len(f)
+    state = np.full(n, UNCLASSIFIED, dtype=object)
+    why = np.full(n, "", dtype=object)
+    art = f["artifact_reason"].astype(str).to_numpy() != ""
+    state[art], why[art] = ARTIFACT, f["artifact_reason"].to_numpy()[art]
+    nh, ph, os_ = f["nh4_sign"].to_numpy(), f["ph_sign"].to_numpy(), f["orp_sign"].to_numpy()
+    lvl = f["orp_rel_window_median_mV"].to_numpy()
+    have = ~art & np.isfinite(nh) & np.isfinite(ph) & np.isfinite(os_) & np.isfinite(lvl)
+    why[~art & ~have] = "slope window crosses an artifact or event"
+    low, high = lvl <= -ORP_LEVEL_MV, lvl >= ORP_LEVEL_MV
+    rules = [
+        (have & (nh > 0), UNCLASSIFIED, "C(t) rising without an N source (drift or evaporation)"),
+        (have & (nh < 0) & (ph > 0), UNCLASSIFIED, "consumption with a rising pH (conflicting indicators)"),
+        (have & (nh < 0) & (ph <= 0), "active_nitrification", RULES[0].condition),
+        (have & (nh == 0) & low & (os_ <= 0) & (ph <= 0), "oxygen_limited", RULES[1].condition),
+        (have & (nh == 0) & ~low & (high | (ph > 0)), "inactive_oversupplied", RULES[2].condition),
+        (have & (nh == 0), UNCLASSIFIED, "no indicator beyond its threshold, or low ORP with a rising ORP or pH"),
+    ]
+    done = ~have
+    for mask, st, reason in rules:
+        m = mask & ~done
+        state[m], why[m] = st, reason
+        done |= m
+    return f.assign(state=state, state_reason=why)
+
+
+def timeline(bins: pd.DataFrame) -> pd.DataFrame:
+    """Time-ordered runs of one state (start, end, duration, medians)."""
+    s = bins["state"].to_numpy()
+    starts = np.r_[0, np.flatnonzero(s[1:] != s[:-1]) + 1]
+    ends = np.r_[starts[1:], len(s)]
+    rows = []
+    for a, b in zip(starts, ends):
+        part = bins.iloc[a:b]
+        rows.append({"state": s[a], "t_start_d": float(part["t_mid_d"].iloc[0] - BIN_D / 2),
+                     "t_end_d": float(part["t_mid_d"].iloc[-1] + BIN_D / 2), "duration_d": (b - a) * BIN_D,
+                     "n_bins": b - a, "median_C_inv_mgN_L": float(part["C_inv_mgN_L"].median()),
+                     "median_consumption_mgN_L_d": float((-part["nh4_slope_mgN_L_d"]).median()),
+                     "median_pH": float(part["pH"].median()),
+                     "median_orp_rel_mV": float(part["orp_rel_window_median_mV"].median()),
+                     "reason": "; ".join(sorted(set(part["state_reason"].astype(str)) - {""}))[:300]})
+    return pd.DataFrame(rows)
+
+
+def interval_bounds(cfg: Config) -> list[tuple[str, float, float]]:
+    p = cfg.pulse_times_d
+    return [("before pulse 1", T0_D, p[0]), *[(f"pulse {k}", a, b) for k, (a, b)
+                                                   in enumerate(zip(p, [*p[1:], END_D]), start=1)], ("whole record", T0_D, END_D)]
+
+
+def state_fractions(bins: pd.DataFrame, lo: float, hi: float) -> dict:
+    """Time fractions of each state in [lo, hi); the idle fraction is inactive time over stirred (total) time and over
+    classified time. An interval without any process-state bin yields ``not computed`` instead of a fraction."""
+    m = (bins["t_mid_d"] >= lo) & (bins["t_mid_d"] < hi)
+    st = bins.loc[m, "state"]
+    total = len(st)
+    out = {"t_from_d": lo, "t_to_d": hi, "n_bins": total}
+    for s in (*STATES, ARTIFACT, UNCLASSIFIED):
+        out[f"fraction_{s}"] = float((st == s).sum() / total) if total else np.nan
+    classified = int(st.isin(STATES).sum())
+    out["classified_fraction"] = classified / total if total else np.nan
+    if classified == 0:
+        out["idle_fraction_of_stirred_time"] = out["idle_fraction_of_classified_time"] = np.nan
+        out["status"] = "not computed: no bin with a process state in this interval"
+    else:
+        out["idle_fraction_of_stirred_time"] = float((st == "inactive_oversupplied").sum() / total)
+        out["idle_fraction_of_classified_time"] = float((st == "inactive_oversupplied").sum() / classified)
+        out["status"] = "computed"
+    return out
+
+
+# --- Block bootstrap -------------------------------------------------------------------------------------------
+def acf_block_length(y: np.ndarray, minimum: int) -> int:
+    """Block length: the first lag at which the autocorrelation of y drops below 1/e, at least ``minimum``."""
+    y = np.asarray(y, dtype=float) - np.mean(y)
+    n = len(y)
+    den = float(y @ y)
+    for lag in range(1, n // 2):
+        if den == 0 or float(y[:-lag] @ y[lag:]) / den < 1 / math.e:
+            return max(lag, minimum)
+    return max(n // 2, minimum)
+
+
+def block_bootstrap_diff(y: np.ndarray, group_a: np.ndarray, group_b: np.ndarray, block: int,
+                         n_boot: int = N_BOOT, seed: int = SEED, strata: np.ndarray | None = None) -> dict:
+    """mean(y | A) − mean(y | B) with a moving-block bootstrap percentile interval.
+
+    The series is time-ordered; blocks of ``block`` consecutive bins keep their group labels, so the autocorrelation
+    inside a block is preserved. With ``strata`` (e.g. the pulse interval), blocks are drawn within each stratum and
+    the statistic is the bin-weighted mean of the within-stratum differences (strata lacking a group are skipped).
+    """
+    y = np.asarray(y, dtype=float)
+    a, b = np.asarray(group_a, dtype=bool), np.asarray(group_b, dtype=bool)
+    if np.any(a & b):
+        raise ValueError("the two groups overlap")
+    keep = a | b
+    y, a, b = y[keep], a[keep], b[keep]
+    st = np.zeros(len(y), dtype=int) if strata is None else np.asarray(strata)[keep]
+    labels = [s for s in pd.unique(st) if a[st == s].any() and b[st == s].any()]
+
+    def stat(idx_by_stratum):
+        num = den = 0.0
+        for idx in idx_by_stratum.values():
+            ya, yb = y[idx][a[idx]], y[idx][b[idx]]
+            if len(ya) == 0 or len(yb) == 0:
+                continue
+            w = len(idx)
+            num += w * (ya.mean() - yb.mean())
+            den += w
+        return num / den if den else np.nan
+
+    base = {s: np.flatnonzero(st == s) for s in labels}
+    est = stat(base)
+    out = {"diff": est, "ci95_low": np.nan, "ci95_high": np.nan, "n_a": int(a.sum()), "n_b": int(b.sum()),
+           "block_bins": block, "n_strata": len(labels), "n_boot_valid": 0}
+    if not labels:
+        out["status"] = "not computed: a group is empty in every stratum"
+        return out
+    if min(out["n_a"], out["n_b"]) < MIN_BLOCKS_PER_GROUP * block:
+        out["status"] = (f"not computed: a group has fewer than {MIN_BLOCKS_PER_GROUP} blocks of {block} bins "
+                         f"({out['n_a']} and {out['n_b']} bins); the point difference is descriptive only")
+        return out
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(n_boot):
+        res = {}
+        for s, idx in base.items():
+            n = len(idx)
+            L = min(block, n)
+            k = math.ceil(n / L)
+            starts = rng.integers(0, n - L + 1, size=k)
+            res[s] = idx[(starts[:, None] + np.arange(L)).ravel()[:n]]
+        v = stat(res)
+        if np.isfinite(v):
+            draws.append(v)
+    out["n_boot_valid"] = len(draws)
+    if len(draws) >= 0.9 * n_boot:
+        out["ci95_low"], out["ci95_high"] = (float(x) for x in np.percentile(draws, [2.5, 97.5]))
+        out["status"] = "computed"
+    else:
+        out["status"] = f"not computed: only {len(draws)} of {n_boot} resamples contain both groups"
+    return out
+
+
+def indicator_groups(bins: pd.DataFrame) -> dict[str, np.ndarray]:
+    lvl = bins["orp_rel_window_median_mV"].to_numpy()
+    ph = bins["ph_sign"].to_numpy()
+    return {"orp_low": lvl <= -ORP_LEVEL_MV, "orp_high": lvl >= ORP_LEVEL_MV,
+            "ph_rising": ph > 0, "ph_not_rising": ph <= 0}
+
+
+def comparisons(bins: pd.DataFrame, cfg: Config) -> pd.DataFrame:
+    """NH4 consumption (−slope of C(t)) between NH4-free indicator groups, pooled and within pulse intervals; and,
+    descriptively (circular), between the full states."""
+    ok = (bins["artifact_reason"] == "") & bins["nh4_slope_mgN_L_d"].notna() & bins["orp_rel_window_median_mV"].notna() \
+        & bins["ph_sign"].notna()
+    b = bins[ok].reset_index(drop=True)
+    y = -b["nh4_slope_mgN_L_d"].to_numpy()
+    if len(y) < 2 * (2 * SLOPE_HALF_BINS + 1):
+        return pd.DataFrame([{"comparison": "all", "status": f"not computed: {len(y)} eligible bins"}])
+    block = acf_block_length(y, 2 * SLOPE_HALF_BINS + 1)
+    strata = np.searchsorted(np.asarray(cfg.pulse_times_d), b["t_mid_d"].to_numpy(), side="right")
+    g = indicator_groups(b)
+    rows = []
+    for name, (ga, gb) in INDICATOR_PARTITIONS.items():
+        for scope, stv in (("pooled", None), ("within pulse intervals", strata)):
+            r = block_bootstrap_diff(y, g[ga], g[gb], block, strata=stv)
+            rows.append({"comparison": f"{name} ({scope})", "group_a": ga, "group_b": gb, "role": "ASSOCIATION TEST "
+                         "(NH4-free partition; not a cause: time and electrode state are confounded)", **r})
+    st = b["state"].to_numpy()
+    for sa, sb in (("active_nitrification", "inactive_oversupplied"), ("active_nitrification", "oxygen_limited"),
+                   ("oxygen_limited", "inactive_oversupplied")):
+        r = block_bootstrap_diff(y, st == sa, st == sb, block)
+        rows.append({"comparison": f"{sa} vs {sb} (pooled)", "group_a": sa, "group_b": sb,
+                     "role": "DESCRIPTIVE (circular: the states are defined with the NH4 slope)", **r})
+    out = pd.DataFrame(rows)
+    out["response"] = "NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d)"
+    return out
+
+
+# --- Stage -----------------------------------------------------------------------------------------------------
+@dataclass
+class StateResult:
+    bins: pd.DataFrame
+    timeline: pd.DataFrame
+    fractions: pd.DataFrame
+    comparisons: pd.DataFrame
+    rules: pd.DataFrame
+    excluded: set = field(default_factory=set)
+
+
+def compute(cfg: Config, inputs: dict) -> StateResult:
+    excluded = excluded_features(inputs["verdicts"])
+    validate_rules(RULES, excluded)
+    grid = inputs["grid"]
+    g = grid[(grid["t_start_d"] >= -1e-9) & (grid["t_end_d"] <= END_D + 1e-9)].reset_index(drop=True)
+    reason = artifact_reasons(g["t_mid_d"].to_numpy(), g, cfg, inputs["jumps"], inputs["held"])
+    f = features(g, inputs["truth"], reason)
+    bins = classify(f)
+    bins = bins[bins["t_mid_d"] >= T0_D].reset_index(drop=True)
+    fr = pd.DataFrame([{"interval": name, **state_fractions(bins, lo, hi)} for name, lo, hi in interval_bounds(cfg)])
+    return StateResult(bins, timeline(bins), fr, comparisons(bins, cfg), rules_table(excluded), excluded)
+
+
+def load_inputs(out_dir: Path) -> dict:
+    files = {"grid": "processed/grid_0p01d.parquet", "truth": "processed/nh4_truth.parquet",
+             "jumps": "tables/nh4_jumps.csv", "held": "tables/nh4_held_segments.csv",
+             "verdicts": "tables/sensor_verdicts.csv"}
+    out = {}
+    for k, rel in files.items():
+        p = Path(out_dir) / rel
+        if not p.is_file():
+            raise FileNotFoundError(f"{p} missing: run the earlier stages (`python -m bnr_neq run-all`) first")
+        out[k] = pd.read_parquet(p) if rel.endswith(".parquet") else pd.read_csv(p)
+    return out
+
+
+def write_report(cfg: Config, r: StateResult, path: Path) -> None:
+    from .report import md_table
+
+    whole = r.fractions[r.fractions["interval"] == "whole record"].iloc[0]
+    lines = [
+        "# Process states from relative ORP, pH and the inverted NH4 (W3)",
+        "",
+        "Generated by `python -m bnr_neq states`. Do not edit by hand. Implementer output, not approved.",
+        "",
+        "## Pre-registered rules",
+        "",
+        ("Fixed from sensor resolution and physical scales before any state was computed (see `states.py`). Rules are "
+         "applied in order; a bin flagged by QC carries no process state. Excluded sensor features (from the M2 "
+         f"verdicts): {', '.join(sorted(r.excluded)) or 'none'}; a rule that used one would raise."),
+        "",
+        md_table(r.rules),
+        "",
+        "## Time fractions per interval",
+        "",
+        (f"Over the whole record (day {T0_D:g} to {END_D:g}) {100 * whole['classified_fraction']:.0f} % of the time has a "
+         f"process state; the inactive, over-supplied state takes {100 * whole['idle_fraction_of_stirred_time']:.0f} % of "
+         f"the stirred time ({100 * whole['idle_fraction_of_classified_time']:.0f} % of the classified time)."),
+        "",
+        md_table(r.fractions, digits=3),
+        "",
+        "## NH4 consumption between indicator groups (block bootstrap)",
+        "",
+        ("The full states use the NH4 slope, so their NH4 comparison is circular and only descriptive. The association "
+         "test uses ORP and pH alone. Moving-block bootstrap (fixed seed, "
+         f"{N_BOOT} resamples): the block length is the larger of the slope window and the first lag where the "
+         "autocorrelation of the response drops below 1/e, so overlapping windows and autocorrelation are kept inside "
+         "blocks. 'Within pulse intervals' compares bins of the same pulse interval only, which removes the "
+         "between-interval time trend but not the trend inside an interval. These are associations, not causes."),
+        "",
+        md_table(r.comparisons, digits=3),
+        "",
+        "## State timeline (time-ordered runs)",
+        "",
+        md_table(r.timeline[r.timeline["duration_d"] >= 0.1], digits=3),
+        "",
+        "Runs shorter than 0.1 d are omitted here; `states_timeline.csv` lists every run.",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run(cfg: Config, out_dir) -> StateResult:
+    from .pipeline import out_dirs
+
+    out_dir = Path(out_dir)
+    inputs = load_inputs(out_dir)
+    d = out_dirs(out_dir)
+    r = compute(cfg, inputs)
+    r.bins.to_parquet(d["processed"] / "states_bins.parquet", index=False)
+    r.timeline.to_csv(d["tables"] / "states_timeline.csv", index=False)
+    r.fractions.to_csv(d["tables"] / "states_fractions.csv", index=False)
+    r.comparisons.to_csv(d["tables"] / "states_comparison.csv", index=False)
+    r.rules.to_csv(d["tables"] / "states_rules.csv", index=False)
+    write_report(cfg, r, d["reports"] / "states.md")
+    return r

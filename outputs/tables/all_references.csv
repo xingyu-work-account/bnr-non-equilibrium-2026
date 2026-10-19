@@ -1,0 +1,56 @@
+milestone,quantity,reference,obtained,tolerance,pass,note
+M2,nh4_response_fraction_pct (pulse 1),37.0,37.04249526026941,3.0,True,
+M2,nh4_response_fraction_pct (pulse 2),29.0,29.000608681190755,3.0,True,
+M2,nh4_response_fraction_pct (pulse 3),26.0,26.17764554576196,3.0,True,
+M2,nh4_response_fraction_pct (pulse 4),17.0,17.43594877764843,3.0,True,
+M2,nh4_obs_change_mgNH4_L (pulse 1),31.1,31.23,2.0,True,
+M2,nh4_obs_change_mgNH4_L (pulse 2),24.4,24.450000000000003,2.0,True,
+M2,nh4_obs_change_mgNH4_L (pulse 3),22.1,22.07,2.0,True,
+M2,nh4_obs_change_mgNH4_L (pulse 4),14.7,14.700000000000005,2.0,True,
+M2,ec_obs_change_mS_cm (pulse 1),0.005,0.0051594189999999,0.01,True,
+M2,ec_obs_change_mS_cm (pulse 2),-0.062,-0.0605796950000001,0.01,True,
+M2,ec_obs_change_mS_cm (pulse 3),-0.007,-0.006666665,0.01,True,
+M2,ec_obs_change_mS_cm (pulse 4),0.016,0.0163768075,0.01,True,
+M2,orp_obs_change_mV (pulse 1),0.4,0.4000000000000057,0.5,True,
+M2,orp_obs_change_mV (pulse 2),0.0,0.0,0.5,True,
+M2,orp_obs_change_mV (pulse 3),0.1,0.125,0.5,True,
+M2,orp_obs_change_mV (pulse 4),0.2,0.2099999999999795,0.5,True,
+M2,ph_obs_change (pulse 1),-0.01,-0.0099999999999997,0.02,True,
+M2,ph_obs_change (pulse 2),0.02,0.0199999999999995,0.02,True,
+M2,ph_obs_change (pulse 3),0.0,0.0,0.02,True,
+M2,ph_obs_change (pulse 4),0.04,0.04,0.02,True,
+M2,ec_median_day_0.3_1.3_mS_cm,1.069,1.068985805,0.005,True,
+M2,ec_median_day_48.5_49.6_mS_cm,1.071,1.07101479,0.005,True,
+M2,nh4_median_start_mgNH4_L,47.1,47.02,0.5,True,
+M2,nh4_median_end_mgNH4_L,43.1,43.13,0.5,True,
+M2,nh4_offset_jump_day,2.59,2.625581395348837,0.02,False,nearest detected offset; detector run onset 2.600 d
+M2,nh4_offset_jump_day,17.84,17.875227272727273,0.02,False,nearest detected offset; detector run onset 17.850 d
+M2,nh4_offset_jump_day,37.19,37.21906976744186,0.02,False,nearest detected offset; detector run onset 37.194 d
+M2,nh4_offset_jump_day,44.63,44.66023333333333,0.02,False,nearest detected offset; detector run onset 44.636 d
+M2,nh4_delayed_response_day_pulse1 (pulse 1),8.85,8.858372093023256,0.02,True,largest response to pulse 1; lag 7.88 h
+M2,nh4_delayed_response_day_pulse2 (pulse 2),10.88,10.88318181818182,0.02,True,largest response to pulse 2; lag 7.52 h
+M2,ec_late_pulse_count,29.0,29.0,3.0,True,median decay 23.1 min (reference about 24 min)
+M3,slope_mgNH4_L_d 0.3-2.59 (production sub-segment),-1.89,-1.6714314281353952,0.189,False,fit window 1.100 to 2.625 d; exact window gives -1.914
+M3,slope_mgNH4_L_d 2.59-8.82 (production sub-segment),-3.42,0.9918376801799812,0.342,False,fit window 6.647 to 8.530 d; exact window gives -3.406
+M3,slope_mgNH4_L_d 10.85-17.84 (production sub-segment),-1.95,-1.9387801801211684,0.195,True,fit window 10.983 to 17.875 d; exact window gives -1.951
+M3,slope_mgNH4_L_d 17.84-24.6 (production sub-segment),-0.57,-0.5783521800896261,0.0569999999999999,True,fit window 17.975 to 24.590 d; exact window gives -0.573
+M3,slope_mgNH4_L_d 24.6-32.36 (production sub-segment),-0.48,-0.4836535220761677,0.05,True,fit window 24.765 to 32.390 d; exact window gives -0.480
+M3,slope_mgNH4_L_d 32.36-37.19 (production sub-segment),-0.31,-0.2962554197871609,0.05,True,fit window 32.496 to 37.219 d; exact window gives -0.304
+M3,slope_mgNH4_L_d 37.19-44.63 (production sub-segment),-0.28,-0.2831880173433241,0.05,True,fit window 37.319 to 44.660 d; exact window gives -0.282
+M3,slope_mgNH4_L_d 44.63-47.92 (production sub-segment),0.12,0.1256079664569516,0.05,True,fit window 44.760 to 47.920 d; exact window gives 0.115
+M3,consumption_gain_corrected_mgN_L_d after pulse 2,5.2,5.191075258495138,0.52,True,sub-segment 18 (10.983 to 17.875 d); tolerance: 10 % (reference says 'about')
+M3,consumption_gain_corrected_mgN_L_d after pulse 4,1.4,1.3193395658825615,0.1399999999999999,True,sub-segment 23 (32.496 to 37.219 d); tolerance: 10 % (reference says 'about')
+M3,"free ammonia min, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis)",0.7,0.7016289258117225,0.05,True,range of sub-segment medians; tolerance: rounding of the reference to 0.1
+M3,"free ammonia max, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis)",1.2,1.168051300865198,0.05,True,range of sub-segment medians; tolerance: rounding of the reference to 0.1
+M3,max Lomb-Scargle normalized power (periodicity band),0.05,0.0515723146541799,0.01,True,ORP at 0.346 c/d; full band max 0.628; tolerance: 0.01 (reference says 'about')
+M4,"delta_A_kJ_mol pulse 1 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",4.2,4.17219224313269,0.1,True,
+M4,"delta_A_kJ_mol pulse 2 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",2.5,2.471484756790058,0.1,True,
+M4,"delta_A_kJ_mol pulse 3 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",3.1,3.1375853322769736,0.1,True,
+M4,"delta_A_kJ_mol pulse 4 (SENSITIVITY: reading as TAN, as in the preliminary analysis)",2.4,2.3646973791794315,0.1,True,
+M4,coexistence affinity kJ/mol (documented SCENARIO),317.0,316.8948979518364,2.0,True,
+M4,HCO3- air-equilibrium mmol/L at pH 7.3,0.127,0.1268379722568847,0.001,True,
+M4,HCO3- air-equilibrium mmol/L at pH 7.8,0.401,0.4010968861290032,0.001,True,
+M4,O2 demand min mg O2/L/d (GAIN-CORRECTED),6.0,5.763434415914505,0.6,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+M4,O2 demand max mg O2/L/d (GAIN-CORRECTED),33.0,77.52693433702237,3.3,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+M4,kLa required min 1/d,0.7,0.6977523505949764,0.07,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+M4,kLa required max 1/d,4.0,9.385827401576558,0.4,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
