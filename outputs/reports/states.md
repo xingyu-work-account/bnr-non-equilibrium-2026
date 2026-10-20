@@ -8,128 +8,124 @@ Fixed from sensor resolution and physical scales before any state was computed (
 
 | state | condition | features | thresholds | excluded_features |
 | --- | --- | --- | --- | --- |
-| sensor_artifact | pulse transient (0.1 d), NH4 step region (to resume + 0.1 d), held/damped NH4, ORP electrode event, empty NH4/pH/ORP bin, before day 1 | QC flags | slope window 1.01 d (Theil-Sen 95 % interval); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
-| active_nitrification | NH4 slope 95 % interval < 0 and pH not rising | nh4_inverted, ph | slope window 1.01 d (Theil-Sen 95 % interval); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
-| oxygen_limited | NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising | nh4_inverted, orp_relative, ph | slope window 1.01 d (Theil-Sen 95 % interval); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
-| inactive_oversupplied | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | nh4_inverted, orp_relative, ph | slope window 1.01 d (Theil-Sen 95 % interval); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
-| unclassified | slope window crosses an artifact, NH4 rising (no N source), consumption with a rising pH, or no indicator beyond its threshold | - | slope window 1.01 d (Theil-Sen 95 % interval); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
+| sensor_artifact | pulse transient (0.1 d), NH4 step region (to resume + 0.1 d), held/damped NH4, ORP electrode event, empty NH4/pH/ORP bin, before day 1 | QC flags | slope window 1.01 d (Theil-Sen 95 % interval, half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window residuals, capped at 0.999; C(t), pH and ORP alike); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
+| active_nitrification | NH4 slope 95 % interval < 0 and pH not rising | nh4_inverted, ph | slope window 1.01 d (Theil-Sen 95 % interval, half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window residuals, capped at 0.999; C(t), pH and ORP alike); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
+| oxygen_limited | NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising | nh4_inverted, orp_relative, ph | slope window 1.01 d (Theil-Sen 95 % interval, half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window residuals, capped at 0.999; C(t), pH and ORP alike); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
+| inactive_oversupplied | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | nh4_inverted, orp_relative, ph | slope window 1.01 d (Theil-Sen 95 % interval, half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window residuals, capped at 0.999; C(t), pH and ORP alike); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
+| unclassified | slope window crosses an artifact, NH4 rising (no N source), consumption with a rising pH, or no indicator beyond its threshold | - | slope window 1.01 d (Theil-Sen 95 % interval, half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window residuals, capped at 0.999; C(t), pH and ORP alike); pH rising/falling also needs \|slope\| x window ≥ 0.01 (one quantum); ORP_rel level ±15 mV against the centred 5 d median | ec, nh4_reading, orp_absolute |
 
 ## Time fractions per interval
 
-Over the whole record (day 1 to 47.92) 12 % of the time has a process state; the inactive, over-supplied state takes 3 % of the stirred time (25 % of the classified time).
+Over the whole record (day 1 to 47.92) 12 % of the time has a process state (coverage). The idle fraction (inactive, over-supplied) is bounded: at least 5 % of the time (inactive bins over all bins) and at most 93 % (inactive, unclassified and artifact bins over all bins). Over the classified time only, CONDITIONAL on those bins being representative, it is not computed: classified fraction 0.123 below 0.5 (the classified bins are not representative of the interval; see the bounds) (computed only where the classified fraction is ≥ 0.5). Slope intervals are widened for the autocorrelation inside each window (`*_slope_resid_lag1` in `states_bins.parquet`).
 
-| interval | t_from_d | t_to_d | n_bins | fraction_active_nitrification | fraction_inactive_oversupplied | fraction_oxygen_limited | fraction_sensor_artifact | fraction_unclassified | classified_fraction | idle_fraction_of_stirred_time | idle_fraction_of_classified_time | status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| before pulse 1 | 1 | 8.53 | 753 | 0.0319 | 0 | 0 | 0.3 | 0.668 | 0.0319 | 0 | 0 | computed |
-| pulse 1 | 8.53 | 10.6 | 204 | 0.0392 | 0 | 0 | 0.23 | 0.73 | 0.0392 | 0 | 0 | computed |
-| pulse 2 | 10.6 | 24.6 | 1402 | 0.0428 | 0.00999 | 0 | 0.643 | 0.305 | 0.0528 | 0.00999 | 0.189 | computed |
-| pulse 3 | 24.6 | 32.4 | 780 | 0.131 | 0.00769 | 0 | 0.0603 | 0.801 | 0.138 | 0.00769 | 0.0556 | computed |
-| pulse 4 | 32.4 | 47.9 | 1553 | 0.14 | 0.0779 | 0 | 0.0212 | 0.76 | 0.218 | 0.0779 | 0.357 | computed |
-| whole record | 1 | 47.9 | 4692 | 0.0878 | 0.0301 | 0 | 0.267 | 0.615 | 0.118 | 0.0301 | 0.255 | computed |
+| interval | t_from_d | t_to_d | n_bins | fraction_active_nitrification | fraction_inactive_oversupplied | fraction_oxygen_limited | fraction_sensor_artifact | fraction_unclassified | n_classified | n_inactive_oversupplied | classified_fraction | idle_fraction_lower_bound | idle_fraction_upper_bound | bounds_status | idle_fraction_of_classified_time | status | nh4_observation_model | nh4_series |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before pulse 1 | 1 | 8.53 | 753 | 0.0226 | 0 | 0 | 0.3 | 0.677 | 17 | 0 | 0.0226 | 0 | 0.977 | computed | NaN | not computed: classified fraction 0.023 below 0.5 (the classified bins are not representative of the interval; see the bounds) | M6_log | C_inv:c29e26a0fb89 |
+| pulse 1 | 8.53 | 10.6 | 204 | 0 | 0 | 0 | 0.23 | 0.77 | 0 | 0 | 0 | 0 | 1 | computed | NaN | not computed: no bin with a process state in this interval | M6_log | C_inv:c29e26a0fb89 |
+| pulse 2 | 10.6 | 24.6 | 1402 | 0.0863 | 0.0271 | 0.00642 | 0.643 | 0.238 | 168 | 38 | 0.12 | 0.0271 | 0.907 | computed | NaN | not computed: classified fraction 0.120 below 0.5 (the classified bins are not representative of the interval; see the bounds) | M6_log | C_inv:c29e26a0fb89 |
+| pulse 3 | 24.6 | 32.4 | 780 | 0.0705 | 0.0692 | 0.0692 | 0.0603 | 0.731 | 163 | 54 | 0.209 | 0.0692 | 0.86 | computed | NaN | not computed: classified fraction 0.209 below 0.5 (the classified bins are not representative of the interval; see the bounds) | M6_log | C_inv:c29e26a0fb89 |
+| pulse 4 | 32.4 | 47.9 | 1553 | 0.0444 | 0.103 | 0 | 0.0212 | 0.831 | 229 | 160 | 0.147 | 0.103 | 0.956 | computed | NaN | not computed: classified fraction 0.147 below 0.5 (the classified bins are not representative of the interval; see the bounds) | M6_log | C_inv:c29e26a0fb89 |
+| whole record | 1 | 47.9 | 4692 | 0.0558 | 0.0537 | 0.0134 | 0.267 | 0.61 | 577 | 252 | 0.123 | 0.0537 | 0.931 | computed | NaN | not computed: classified fraction 0.123 below 0.5 (the classified bins are not representative of the interval; see the bounds) | M6_log | C_inv:c29e26a0fb89 |
 
 ## NH4 consumption between indicator groups (block bootstrap)
 
 The full states use the NH4 slope, so their NH4 comparison is circular and only descriptive. The association test uses ORP and pH alone. Moving-block bootstrap (fixed seed, 999 resamples): the block length is the larger of the slope window and the first lag where the autocorrelation of the response drops below 1/e, so overlapping windows and autocorrelation are kept inside blocks. 'Within pulse intervals' compares bins of the same pulse interval only, which removes the between-interval time trend but not the trend inside an interval. These are associations, not causes.
 
-| comparison | group_a | group_b | role | diff | ci95_low | ci95_high | n_a | n_b | block_bins | n_strata | n_boot_valid | status | response |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ORP_rel low vs high (pooled) | orp_low | orp_high | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | -0.75 | NaN | NaN | 89 | 66 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (89 and 66 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| ORP_rel low vs high (within pulse intervals) | orp_low | orp_high | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | -0.748 | NaN | NaN | 89 | 66 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (89 and 66 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| pH rising vs not rising (pooled) | ph_rising | ph_not_rising | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | 1.42 | -0.504 | 2.62 | 771 | 1260 | 101 | 1 | 999 | computed | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| pH rising vs not rising (within pulse intervals) | ph_rising | ph_not_rising | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | 1.35 | -0.529 | 2.57 | 771 | 1260 | 101 | 4 | 999 | computed | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| active_nitrification vs inactive_oversupplied (pooled) | active_nitrification | inactive_oversupplied | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | 3.74 | NaN | NaN | 412 | 141 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (412 and 141 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| active_nitrification vs oxygen_limited (pooled) | active_nitrification | oxygen_limited | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | NaN | NaN | NaN | 412 | 0 | 101 | 0 | 0 | not computed: a group is empty in every stratum | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
-| oxygen_limited vs inactive_oversupplied (pooled) | oxygen_limited | inactive_oversupplied | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | NaN | NaN | NaN | 0 | 141 | 101 | 0 | 0 | not computed: a group is empty in every stratum | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) |
+| comparison | group_a | group_b | role | diff | ci95_low | ci95_high | n_a | n_b | block_bins | n_strata | n_boot_valid | status | response | nh4_observation_model | nh4_series |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ORP_rel low vs high (pooled) | orp_low | orp_high | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | -0.75 | NaN | NaN | 89 | 66 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (89 and 66 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| ORP_rel low vs high (within pulse intervals) | orp_low | orp_high | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | -0.748 | NaN | NaN | 89 | 66 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (89 and 66 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| pH rising vs not rising (pooled) | ph_rising | ph_not_rising | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | 1.06 | -0.81 | 2.51 | 325 | 1706 | 101 | 1 | 999 | computed | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| pH rising vs not rising (within pulse intervals) | ph_rising | ph_not_rising | ASSOCIATION TEST (NH4-free partition; not a cause: time and electrode state are confounded) | 1.01 | -0.816 | 2.61 | 325 | 1706 | 101 | 3 | 999 | computed | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification vs inactive_oversupplied (pooled) | active_nitrification | inactive_oversupplied | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | 3.57 | 1.02 | 5.83 | 262 | 252 | 101 | 1 | 999 | computed | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification vs oxygen_limited (pooled) | active_nitrification | oxygen_limited | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | 3.27 | NaN | NaN | 262 | 63 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (262 and 63 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
+| oxygen_limited vs inactive_oversupplied (pooled) | oxygen_limited | inactive_oversupplied | DESCRIPTIVE (circular: the states are defined with the NH4 slope) | 0.299 | NaN | NaN | 63 | 252 | 101 | 1 | 0 | not computed: a group has fewer than 2 blocks of 101 bins (63 and 252 bins); the point difference is descriptive only | NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d) | M6_log | C_inv:c29e26a0fb89 |
 
 ## State timeline (time-ordered runs)
 
-| state | t_start_d | t_end_d | duration_d | n_bins | median_C_inv_mgN_L | median_consumption_mgN_L_d | median_pH | median_orp_rel_mV | reason |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sensor_artifact | 1 | 1.9 | 0.9 | 90 | 178 | NaN | 6.98 | NaN | NH4 held/damped output |
-| unclassified | 1.9 | 2.62 | 0.72 | 72 | 175 | NaN | 6.91 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 2.62 | 2.73 | 0.11 | 11 | 178 | NaN | 7.04 | NaN | NH4 step region |
-| unclassified | 2.73 | 3.19 | 0.46 | 46 | 175 | NaN | 7.45 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 3.19 | 3.31 | 0.12 | 12 | 150 | NaN | 7.33 | NaN | NH4 step region |
-| unclassified | 3.31 | 3.68 | 0.37 | 37 | 131 | NaN | 7.21 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 3.68 | 3.81 | 0.13 | 13 | 143 | NaN | 7.17 | NaN | NH4 step region |
-| sensor_artifact | 3.9 | 4.18 | 0.28 | 28 | 135 | NaN | 7.16 | NaN | NH4 step region |
-| unclassified | 4.18 | 4.81 | 0.63 | 63 | 136 | NaN | 7.19 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 4.81 | 4.95 | 0.14 | 14 | 123 | NaN | 7.15 | NaN | NH4 step region |
-| sensor_artifact | 4.99 | 5.19 | 0.2 | 20 | 128 | NaN | 7.12 | NaN | NH4 step region |
-| unclassified | 5.19 | 5.56 | 0.37 | 37 | 129 | NaN | 7.25 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 5.56 | 5.67 | 0.11 | 11 | 129 | NaN | 7.25 | NaN | NH4 step region |
-| unclassified | 5.67 | 5.86 | 0.19 | 19 | 129 | NaN | 7.29 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 5.86 | 6.01 | 0.15 | 15 | 117 | NaN | 7.31 | NaN | NH4 step region |
-| unclassified | 6.01 | 6.53 | 0.52 | 52 | 123 | NaN | 7.18 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 6.53 | 6.65 | 0.12 | 12 | 102 | NaN | 6.98 | NaN | NH4 step region |
-| unclassified | 6.65 | 7.64 | 0.99 | 99 | 100 | -11.6 | 6.86 | 1.66 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| active_nitrification | 7.64 | 7.88 | 0.24 | 24 | 106 | 7.73 | 6.81 | 2.61 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 7.88 | 8.53 | 0.65 | 65 | 102 | 8.72 | 7 | 2.61 | consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event |
-| sensor_artifact | 8.53 | 8.65 | 0.12 | 12 | 62.7 | NaN | 6.98 | NaN | NH4 step region; pulse transient |
-| sensor_artifact | 8.74 | 8.96 | 0.22 | 22 | 81.7 | NaN | 7.01 | NaN | NH4 step region |
-| unclassified | 8.96 | 9.26 | 0.3 | 30 | 152 | NaN | 7.03 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 9.26 | 9.39 | 0.13 | 13 | 160 | NaN | 7.02 | NaN | NH4 step region |
-| unclassified | 9.39 | 9.99 | 0.6 | 60 | 159 | 1.54 | 7 | 8.15 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| unclassified | 10.1 | 10.6 | 0.5 | 50 | 155 | NaN | 6.99 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 10.6 | 10.7 | 0.11 | 11 | 172 | NaN | 7 | NaN | NH4 step region; pulse transient |
-| unclassified | 10.7 | 10.9 | 0.19 | 19 | 173 | NaN | 7 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 10.9 | 11 | 0.11 | 11 | 208 | NaN | 7 | NaN | NH4 step region |
-| unclassified | 11 | 11.5 | 0.5 | 50 | 206 | NaN | 6.96 | NaN | slope window crosses an artifact or event |
-| active_nitrification | 11.5 | 11.6 | 0.1 | 10 | 206 | 0.926 | 6.94 | -15.8 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 11.6 | 13 | 1.42 | 142 | 204 | 1.35 | 6.98 | -7.02 | consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event |
-| sensor_artifact | 13 | 18 | 5 | 500 | 190 | NaN | 7.24 | NaN | NH4 held/damped output; NH4 step region |
-| unclassified | 18 | 18.5 | 0.5 | 50 | 174 | NaN | 7.57 | NaN | slope window crosses an artifact or event |
-| unclassified | 18.5 | 18.9 | 0.39 | 39 | 174 | -0.846 | 7.57 | -0.477 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| inactive_oversupplied | 18.9 | 19 | 0.12 | 12 | 174 | 0.0143 | 7.64 | -0.477 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV |
-| unclassified | 19 | 19.3 | 0.23 | 23 | 174 | 0.438 | 7.69 | -0.343 | consumption with a rising pH (conflicting indicators) |
-| active_nitrification | 19.3 | 19.8 | 0.5 | 50 | 174 | 1.95 | 7.69 | -0.021 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 19.8 | 20.7 | 0.94 | 94 | 172 | 4.35 | 7.81 | 3.29 | consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event |
-| sensor_artifact | 20.7 | 21.7 | 1 | 100 | 165 | NaN | 7.84 | NaN | NH4 held/damped output |
-| unclassified | 21.7 | 21.8 | 0.1 | 10 | 186 | NaN | 7.91 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 21.8 | 24.8 | 2.96 | 296 | 168 | NaN | 7.84 | NaN | NH4 held/damped output; NH4 step region; pulse transient |
-| unclassified | 24.8 | 25.4 | 0.63 | 63 | 243 | -1.06 | 7.6 | -0.0774 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| unclassified | 25.4 | 25.8 | 0.4 | 40 | 243 | 2.16 | 7.6 | -0.169 | consumption with a rising pH (conflicting indicators) |
-| active_nitrification | 25.8 | 26.1 | 0.32 | 32 | 242 | 2.57 | 7.61 | -0.251 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 26.2 | 26.7 | 0.59 | 59 | 242 | -1.65 | 7.6 | 0.115 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| active_nitrification | 26.8 | 27.3 | 0.58 | 58 | 242 | 2.02 | 7.6 | 55.3 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 27.3 | 28 | 0.63 | 63 | 242 | 1.32 | 7.6 | -17.6 | consumption with a rising pH (conflicting indicators) |
-| active_nitrification | 28 | 28.1 | 0.12 | 12 | 241 | 0.665 | 7.63 | -17.7 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 28.1 | 28.8 | 0.75 | 75 | 241 | 0.0632 | 7.6 | -17.5 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| sensor_artifact | 28.8 | 29 | 0.15 | 15 | 239 | NaN | 7.55 | NaN | ORP electrode event |
-| unclassified | 29 | 30.4 | 1.44 | 144 | 238 | -3.07 | 7.52 | -1.13 | C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event |
-| sensor_artifact | 30.4 | 30.6 | 0.15 | 15 | 236 | NaN | 7.51 | NaN | ORP electrode event |
-| unclassified | 30.6 | 32.4 | 1.81 | 181 | 238 | -5.5 | 7.43 | -1.67 | C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event |
-| sensor_artifact | 32.4 | 32.5 | 0.11 | 11 | 292 | NaN | 7.42 | NaN | NH4 step region; pulse transient |
-| unclassified | 32.5 | 33 | 0.5 | 50 | 292 | NaN | 7.25 | NaN | slope window crosses an artifact or event |
-| active_nitrification | 33 | 33.3 | 0.27 | 27 | 291 | 1.24 | 7.23 | 0.154 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 33.3 | 33.4 | 0.12 | 12 | 291 | 0.587 | 7.2 | 0.04 | consumption with a rising pH (conflicting indicators) |
-| active_nitrification | 33.4 | 33.5 | 0.13 | 13 | 291 | 0.163 | 7.23 | 0.0241 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 33.5 | 33.7 | 0.18 | 18 | 291 | 0.102 | 7.24 | -0.0174 | consumption with a rising pH (conflicting indicators) |
-| inactive_oversupplied | 33.7 | 33.9 | 0.24 | 24 | 291 | 0.00454 | 7.22 | -0.197 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV |
-| unclassified | 33.9 | 34.1 | 0.21 | 21 | 291 | -0.107 | 7.25 | -0.413 | C(t) rising without an N source (drift or evaporation) |
-| inactive_oversupplied | 34.1 | 34.3 | 0.12 | 12 | 291 | -0.0112 | 7.26 | -0.463 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV |
-| unclassified | 34.3 | 34.7 | 0.45 | 45 | 291 | 1.14 | 7.28 | -0.413 | consumption with a rising pH (conflicting indicators) |
-| unclassified | 34.9 | 35.1 | 0.22 | 22 | 290 | 0.787 | 7.32 | 0.3 | consumption with a rising pH (conflicting indicators) |
-| unclassified | 35.2 | 37.2 | 2.02 | 202 | 292 | -2.29 | 7.33 | -0.258 | C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event |
-| sensor_artifact | 37.2 | 37.3 | 0.11 | 11 | 300 | NaN | 7.37 | NaN | NH4 step region |
-| unclassified | 37.3 | 38.1 | 0.74 | 74 | 300 | -0.371 | 7.36 | 1.18 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| active_nitrification | 38.1 | 38.3 | 0.23 | 23 | 301 | 0.823 | 7.3 | 1.24 | NH4 slope 95 % interval < 0 and pH not rising |
-| inactive_oversupplied | 38.4 | 39 | 0.53 | 53 | 300 | 0.0546 | 7.36 | 0.708 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV |
-| unclassified | 39.1 | 40.4 | 1.35 | 135 | 301 | -2.72 | 7.38 | -0.677 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| inactive_oversupplied | 40.4 | 40.6 | 0.13 | 13 | 304 | -0.328 | 7.39 | -0.642 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV |
-| active_nitrification | 40.6 | 41.3 | 0.65 | 65 | 302 | 14.3 | 7.37 | 0.0485 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 41.2 | 41.7 | 0.49 | 49 | 291 | 6.73 | 7.38 | 0.307 | consumption with a rising pH (conflicting indicators) |
-| active_nitrification | 41.7 | 41.9 | 0.15 | 15 | 288 | 3.76 | 7.38 | 0.179 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 41.9 | 42.4 | 0.5 | 50 | 290 | -1.51 | 7.38 | 0.108 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| unclassified | 42.4 | 44.1 | 1.66 | 166 | 296 | -4.23 | 7.37 | 0.167 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| unclassified | 44.1 | 44.6 | 0.5 | 50 | 298 | NaN | 7.36 | NaN | slope window crosses an artifact or event |
-| sensor_artifact | 44.6 | 44.8 | 0.11 | 11 | 292 | NaN | 7.4 | NaN | NH4 step region |
-| unclassified | 44.8 | 45.4 | 0.66 | 66 | 291 | -0.362 | 7.39 | -2.74 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event |
-| active_nitrification | 45.4 | 45.6 | 0.14 | 14 | 292 | 0.872 | 7.39 | -2.42 | NH4 slope 95 % interval < 0 and pH not rising |
-| active_nitrification | 45.6 | 45.7 | 0.13 | 13 | 291 | 0.789 | 7.4 | -1.48 | NH4 slope 95 % interval < 0 and pH not rising |
-| active_nitrification | 45.8 | 45.9 | 0.1 | 10 | 291 | 0.801 | 7.34 | -0.883 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 45.9 | 47.2 | 1.35 | 135 | 293 | -3.64 | 7.37 | 0.0427 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH |
-| active_nitrification | 47.2 | 47.4 | 0.19 | 19 | 297 | 1.66 | 7.34 | 0.68 | NH4 slope 95 % interval < 0 and pH not rising |
-| unclassified | 47.4 | 47.9 | 0.5 | 50 | 295 | NaN | 7.34 | NaN | slope window crosses an artifact or event |
+| state | t_start_d | t_end_d | duration_d | n_bins | median_C_inv_mgN_L | median_consumption_mgN_L_d | median_pH | median_orp_rel_mV | reason | nh4_observation_model | nh4_series |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sensor_artifact | 1 | 1.9 | 0.9 | 90 | 178 | NaN | 6.98 | NaN | NH4 held/damped output | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 1.9 | 2.62 | 0.72 | 72 | 175 | NaN | 6.91 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 2.62 | 2.73 | 0.11 | 11 | 178 | NaN | 7.04 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 2.73 | 3.19 | 0.46 | 46 | 175 | NaN | 7.45 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 3.19 | 3.31 | 0.12 | 12 | 150 | NaN | 7.33 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 3.31 | 3.68 | 0.37 | 37 | 131 | NaN | 7.21 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 3.68 | 3.81 | 0.13 | 13 | 143 | NaN | 7.17 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 3.9 | 4.18 | 0.28 | 28 | 135 | NaN | 7.16 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 4.18 | 4.81 | 0.63 | 63 | 136 | NaN | 7.19 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 4.81 | 4.95 | 0.14 | 14 | 123 | NaN | 7.15 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 4.99 | 5.19 | 0.2 | 20 | 128 | NaN | 7.12 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 5.19 | 5.56 | 0.37 | 37 | 129 | NaN | 7.25 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 5.56 | 5.67 | 0.11 | 11 | 129 | NaN | 7.25 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 5.67 | 5.86 | 0.19 | 19 | 129 | NaN | 7.29 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 5.86 | 6.01 | 0.15 | 15 | 117 | NaN | 7.31 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 6.01 | 6.53 | 0.52 | 52 | 123 | NaN | 7.18 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 6.53 | 6.65 | 0.12 | 12 | 102 | NaN | 6.98 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 6.65 | 7.81 | 1.16 | 116 | 102 | -5.87 | 6.86 | 1.7 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 7.81 | 7.98 | 0.17 | 17 | 104 | 9.13 | 6.81 | 2.61 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 7.98 | 8.53 | 0.55 | 55 | 101 | 6.71 | 7 | 3.55 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 8.53 | 8.65 | 0.12 | 12 | 62.7 | NaN | 6.98 | NaN | NH4 step region; pulse transient | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 8.74 | 8.96 | 0.22 | 22 | 81.7 | NaN | 7.01 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 8.96 | 9.26 | 0.3 | 30 | 152 | NaN | 7.03 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 9.26 | 9.39 | 0.13 | 13 | 160 | NaN | 7.02 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 9.39 | 10.6 | 1.18 | 118 | 159 | 2.96 | 7 | 8.15 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 10.6 | 10.7 | 0.11 | 11 | 172 | NaN | 7 | NaN | NH4 step region; pulse transient | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 10.7 | 10.9 | 0.19 | 19 | 173 | NaN | 7 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 10.9 | 11 | 0.11 | 11 | 208 | NaN | 7 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 11 | 11.5 | 0.5 | 50 | 206 | NaN | 6.96 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 11.6 | 11.7 | 0.15 | 15 | 206 | 0.893 | 6.94 | -12.2 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 11.9 | 12.3 | 0.34 | 34 | 205 | 1.48 | 6.97 | -7.02 | consumption with a rising pH (conflicting indicators) | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 12.3 | 12.5 | 0.24 | 24 | 204 | 1.29 | 7 | -5.46 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 12.5 | 13 | 0.5 | 50 | 204 | NaN | 6.99 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 13 | 18 | 5 | 500 | 190 | NaN | 7.24 | NaN | NH4 held/damped output; NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 18 | 18.8 | 0.82 | 82 | 174 | -0.725 | 7.57 | -0.477 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 18.8 | 19.1 | 0.32 | 32 | 174 | 0.0617 | 7.63 | -0.47 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 19.2 | 19.7 | 0.58 | 58 | 174 | 1.66 | 7.69 | -0.135 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 19.8 | 19.9 | 0.12 | 12 | 173 | 3.92 | 7.58 | 2.67 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 19.9 | 20.1 | 0.14 | 14 | 173 | 5.02 | 7.89 | 3.33 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 20.2 | 20.7 | 0.53 | 53 | 170 | 3.88 | 7.81 | 3.43 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 20.7 | 21.7 | 1 | 100 | 165 | NaN | 7.84 | NaN | NH4 held/damped output | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 21.7 | 21.8 | 0.1 | 10 | 186 | NaN | 7.91 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 21.8 | 24.8 | 2.96 | 296 | 168 | NaN | 7.84 | NaN | NH4 held/damped output; NH4 step region; pulse transient | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 24.8 | 25.4 | 0.68 | 68 | 243 | -0.549 | 7.6 | -0.0774 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 25.4 | 25.6 | 0.15 | 15 | 243 | 1.28 | 7.59 | -0.124 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 25.6 | 25.7 | 0.15 | 15 | 243 | 2.29 | 7.62 | -0.169 | consumption with a rising pH (conflicting indicators) | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 25.8 | 26 | 0.16 | 16 | 242 | 2.66 | 7.61 | -0.251 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 26 | 26.7 | 0.78 | 78 | 242 | -1.1 | 7.6 | 0.0227 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 26.7 | 27 | 0.26 | 26 | 243 | 2.08 | 7.6 | 46 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 27 | 27.1 | 0.12 | 12 | 242 | 2.33 | 7.6 | 88.4 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 27.2 | 27.3 | 0.15 | 15 | 241 | 1.33 | 7.56 | 50.7 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 27.4 | 27.5 | 0.14 | 14 | 242 | 1.17 | 7.55 | 4.01 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 27.6 | 27.7 | 0.16 | 16 | 242 | 1.61 | 7.61 | -17.6 | consumption with a rising pH (conflicting indicators); no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| oxygen_limited | 27.8 | 28.3 | 0.5 | 50 | 241 | 0.459 | 7.63 | -17.7 | NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 28.3 | 28.8 | 0.5 | 50 | 241 | NaN | 7.6 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 28.8 | 29 | 0.15 | 15 | 239 | NaN | 7.55 | NaN | ORP electrode event | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 29 | 30.4 | 1.44 | 144 | 238 | -3.07 | 7.52 | -1.13 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 30.4 | 30.6 | 0.15 | 15 | 236 | NaN | 7.51 | NaN | ORP electrode event | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 30.6 | 32.4 | 1.81 | 181 | 238 | -5.5 | 7.43 | -1.67 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 32.4 | 32.5 | 0.11 | 11 | 292 | NaN | 7.42 | NaN | NH4 step region; pulse transient | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 32.5 | 33 | 0.5 | 50 | 292 | NaN | 7.25 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 33.1 | 33.6 | 0.58 | 58 | 291 | 0.441 | 7.23 | 0.0353 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 33.6 | 34.1 | 0.42 | 42 | 291 | -0.00831 | 7.24 | -0.278 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 34.1 | 34.2 | 0.14 | 14 | 291 | -0.0948 | 7.25 | -0.425 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 34.3 | 34.6 | 0.37 | 37 | 291 | 1.01 | 7.28 | -0.451 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 34.8 | 35.5 | 0.71 | 71 | 290 | 0.173 | 7.29 | 0.303 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 35.5 | 36.7 | 1.18 | 118 | 291 | -3.36 | 7.32 | -0.385 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 36.7 | 37.2 | 0.5 | 50 | 295 | NaN | 7.39 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 37.2 | 37.3 | 0.11 | 11 | 300 | NaN | 7.37 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 37.3 | 38.5 | 1.17 | 117 | 300 | 0.0436 | 7.34 | 1.24 | no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 38.5 | 39 | 0.47 | 47 | 300 | 0.0906 | 7.36 | 0.667 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 39 | 40.2 | 1.26 | 126 | 301 | -3.19 | 7.38 | -0.618 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| inactive_oversupplied | 40.2 | 40.5 | 0.24 | 24 | 304 | -1.53 | 7.38 | -0.677 | NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 40.5 | 41 | 0.54 | 54 | 304 | 6.36 | 7.39 | -0.115 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 41 | 41.1 | 0.11 | 11 | 294 | 16.9 | 7.36 | 0.232 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 41.1 | 41.3 | 0.21 | 21 | 292 | 14.5 | 7.33 | 0.261 | no indicator beyond its threshold, or low ORP with a rising ORP or pH | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 41.3 | 41.5 | 0.21 | 21 | 291 | 7.92 | 7.38 | 0.307 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| active_nitrification | 41.6 | 41.8 | 0.23 | 23 | 289 | 5.73 | 7.39 | 0.226 | NH4 slope 95 % interval < 0 and pH not rising | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 41.8 | 44.6 | 2.83 | 283 | 295 | -3.41 | 7.37 | 0.167 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| sensor_artifact | 44.6 | 44.8 | 0.11 | 11 | 292 | NaN | 7.4 | NaN | NH4 step region | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 44.8 | 47.4 | 2.63 | 263 | 292 | -0.776 | 7.38 | -0.389 | C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
+| unclassified | 47.4 | 47.9 | 0.5 | 50 | 295 | NaN | 7.34 | NaN | slope window crosses an artifact or event | M6_log | C_inv:c29e26a0fb89 |
 
 Runs shorter than 0.1 d are omitted here; `states_timeline.csv` lists every run.

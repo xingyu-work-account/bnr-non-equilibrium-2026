@@ -67,7 +67,8 @@ def test_derived_quantity_from_the_raw_reading_raises():
 
 
 def test_check_accepts_empty_cells_read_from_csv(tmp_path):
-    df = _rows(("t_pulse_d", "", ""), ("consumption_weighted_mgN_L_d", "M6", M.OBSERVATION_MODEL))
+    # pass 3 (X3): the model cell must declare a basis; empty label cells (NaN read back from CSV) are still accepted
+    df = _rows(("t_pulse_d", "", M.NH4_INDEPENDENT), ("consumption_weighted_mgN_L_d", "M6", M.OBSERVATION_MODEL))
     df.to_csv(tmp_path / "p.csv", index=False)
     back = pd.read_csv(tmp_path / "p.csv")
     assert back["basis"].isna().any()
@@ -75,10 +76,11 @@ def test_check_accepts_empty_cells_read_from_csv(tmp_path):
 
 
 def test_labelled_sensitivity_and_measured_rows_pass():
+    # pass 3 (X3, X4): the gain metric says SENSITIVITY in its name, the fact row declares itself NH4-independent
     df = _rows(("consumption_weighted_mgN_L_d", "M6", M.OBSERVATION_MODEL),
-               ("consumption_gain_corrected_weighted_mgN_L_d", "SENSITIVITY: GAIN-CORRECTED", M.LINEAR_GAIN),
+               ("consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d", "SENSITIVITY: GAIN-CORRECTED", M.LINEAR_GAIN),
                ("consumption_uncorrected_weighted_mgN_L_d", "measured", M.RAW_READING),
-               ("t_pulse_d", "fact", ""))
+               ("t_pulse_d", "fact", M.NH4_INDEPENDENT))
     assert M.check_single_observation_model(df) == M.OBSERVATION_MODEL
 
 
@@ -143,7 +145,7 @@ def synth_inputs(cfg, ingested, validated, segmented):
     truth, vectors, summary = synthetic_truth(ingested.grid)
     t = np.round(np.arange(1.005, 47.92, 0.01), 10)
     return {"segments": segmented.table, "steps": th["steps"], "oxygen": th["oxygen"], "pulses": validated.pulse_table,
-            "model": pd.DataFrame({"t_d": t, "model_rate_mgN_L_d": 1.0}),
+            "model": pd.DataFrame({"t_d": t, "model_rate_mgN_L_d": 1.0, "model_state_C_mgN_L_conditional_on_C0": 100.0}),
             "model_fit": pd.DataFrame({"model": ["biomass_decay"], "selected": [True]}), "grid": ingested.grid,
             "truth": truth, "truth_vectors": vectors, "truth_summary": summary}
 
@@ -163,16 +165,18 @@ def test_dose_anchored_eta_and_affinity(cfg, synth_inputs):
     truth = synth_inputs["truth"]
     t, c = truth["t_d"].to_numpy(), truth["C_inv_mgN_L"].to_numpy()
     dose = thermo.pulse_dose_from_config(cfg).n_mg_L
-    pre2, pre3 = P.pre_median(t, c, 10.57), P.pre_median(t, c, 24.59)
+    pre1, pre2, pre3 = P.pre_median(t, c, 8.53), P.pre_median(t, c, 10.57), P.pre_median(t, c, 24.59)
     eta = (pre2 + dose - pre3) / dose
     row = m.loc[(2, "eta_conversion_fraction")]
     ratio = m.loc[(2, "removal_to_dose_ratio")]
-    if 0 <= eta <= 1:
-        assert row["value"] == pytest.approx(eta) and ratio["value"] == pytest.approx(eta)
-    elif eta > 1:
-        assert row["status"].startswith("not computed: removal exceeds the dose") and ratio["value"] == pytest.approx(eta)
-    else:
-        assert row["status"].startswith("not computed: negative dose-anchored removal")
+    # pinned (pass 3, X8): C = 5 x reading falls by more than the dose over pulse 2 and rises by more than it over pulse 1
+    assert eta == pytest.approx(1.96, abs=0.01)
+    assert row["status"].startswith("not computed: removal exceeds the dose") and np.isnan(row["value"])
+    assert ratio["status"] == "computed" and ratio["value"] == pytest.approx(eta)
+    eta1 = (pre1 + dose - pre2) / dose
+    assert eta1 == pytest.approx(-0.77, abs=0.01)
+    assert m.loc[(1, "eta_conversion_fraction"), "status"].startswith("not computed: negative dose-anchored removal")
+    assert m.loc[(1, "removal_to_dose_ratio"), "status"].startswith("not computed: negative dose-anchored removal")
     assert m.loc[(2, "delta_A_kJ_mol_SCENARIO_T25C"), "value"] == pytest.approx(
         float(thermo.affinity_step_kJ_mol(pre2, dose)))
     assert m.loc[(2, "delta_A_SENSITIVITY_reading_as_TAN_kJ_mol_SCENARIO_T25C"), "nh4_observation_model"] == M.IDENTITY

@@ -47,7 +47,7 @@ def _tables():
         "pulses.csv": pd.DataFrame({
             "pulse": [1, 2, 1, 2, 1, 2],
             "metric": ["delta_A_kJ_mol_SCENARIO_T25C"] * 2 + ["delta_A_SENSITIVITY_reading_as_TAN_kJ_mol_SCENARIO_T25C"] * 2
-            + ["aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE1", "aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE4"],
+            + ["aeration_energy_demand_kWh_per_kgN_SCENARIO_AE1", "aeration_energy_demand_kWh_per_kgN_SCENARIO_AE4"],
             "value": [0.89, 0.61, 4.17, 2.36, 4.57, 1.1425], "status": ["computed"] * 6,
             "nh4_observation_model": ["M6_log", "M6_log", "identity_reading_as_TAN_SENSITIVITY",
                                       "identity_reading_as_TAN_SENSITIVITY", "M6_log", "M6_log"]}),
@@ -57,7 +57,12 @@ def _tables():
                                                       "alk0_required_if_nitrified_meq_L": [13.1, 20.9]}),
         "alkalinity_bound.csv": _bound(),
         "states_fractions.csv": pd.DataFrame({"interval": ["whole record"], "classified_fraction": [0.12],
-                                              "idle_fraction_of_stirred_time": [0.03]}),
+                                              "idle_fraction_lower_bound": [0.03], "idle_fraction_upper_bound": [0.91],
+                                              "idle_fraction_of_classified_time": [float("nan")],
+                                              "status": ["not computed: classified fraction 0.120 below 0.5 (x)"]}),
+        "model_fit.csv": pd.DataFrame({"model": ["null_no_consumption", "biomass_decay", "alkalinity_limited"],
+                                       "cal_converged": [True, True, False], "selected": [False, True, False],
+                                       "alk0_fitted_meq_L": [float("nan"), float("nan"), 22.7]}),
         "states_comparison.csv": pd.DataFrame({"comparison": ["pH rising vs not rising (within pulse intervals)"],
                                                "diff": [1.3], "ci95_low": [-0.5], "ci95_high": [2.6],
                                                "status": ["computed"]}),
@@ -90,6 +95,18 @@ def test_status_labels_follow_the_prompt():
     for c in ("Absolute NH4 concentrations, rates and conversion", "Conductivity as solution conductivity",
               "Absolute redox potential E_H", "Closed 100 mL frame (W8)"):
         assert labels[c] == "NO-GO"
+    # pass 3 (X2, X1): the idle fraction is never GO, and an unconverged candidate qualifies the model selection
+    assert labels["Idle fraction of stirred time (W3 into W4)"] == "BOUNDS ONLY; NO-GO for a single value"
+    assert labels["Model selection, activity decay against alkalinity limitation (M6, W5)"].startswith("QUALIFIED")
+
+
+def test_idle_and_model_rows_carry_coverage_and_convergence():
+    lab = R.status_labels(_tables()).set_index("conclusion")
+    ev = lab.loc["Idle fraction of stirred time (W3 into W4)", "evidence"]
+    assert "Between 3 and 91 % of the stirred time" in ev and "coverage of 12 % classified" in ev
+    assert "not computed: classified fraction 0.120 below 0.5" in ev
+    ev = lab.loc["Model selection, activity decay against alkalinity limitation (M6, W5)", "evidence"]
+    assert ev.startswith("2 of 3 calibrations converged under one policy; selected biomass_decay")
 
 
 def test_headline_affinity_step_comes_from_the_primary_model():
@@ -188,3 +205,12 @@ def test_assumptions_read_the_configuration(cfg, run_all_dir):
     assert f"{cfg.get('sensors.nh4_to_N_factor'):g}" in text
     n_off = int(t["model_identifiability.csv"]["parameter"].str.startswith("offset_log_").sum())
     assert f"all {n_off} detected electrode-offset jumps" in text
+
+
+def test_numeric_text_cells_are_rounded(tmp_path):
+    """X7 (a): mixed number/status columns read back from CSV are rounded in the report tables."""
+    pd.DataFrame({"parameter": ["v0", "C0"], "estimate": [19.999828959312286, "not identifiable"],
+                  "value": [4.547473508864641e-13, 65.46428371127854]}).to_csv(tmp_path / "m.csv", index=False)
+    out = R.md_table(R.numeric_cells(pd.read_csv(tmp_path / "m.csv")), digits=3)
+    assert "| v0 | 20 | 4.55e-13 |" in out and "| C0 | not identifiable | 65.5 |" in out
+    assert "19.9998" not in out and "65.464" not in out

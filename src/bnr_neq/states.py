@@ -11,7 +11,13 @@ Every 0.01 d grid bin from day 1 is assigned one of
 - ``unclassified``: a slope window crosses an artifact or event, or the indicators conflict or stay inside thresholds.
 
 The rules, windows and thresholds below were fixed from sensor resolution and physical scales before any state was
-computed or compared (``RULES``, ``rules_table``); they are not tuned on the outcome. The classification uses the NH4
+computed or compared (``RULES``, ``rules_table``); they are not tuned on the outcome. A slope is rising, falling or
+flat by its Theil-Sen 95 % interval over the centred 1.01 d window, widened for autocorrelation (pass 3, X2): each
+half-width is multiplied by √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ the lag-1 autocorrelation of the window's
+residuals about its Theil-Sen line (capped at 0.999), the formula of ``model.effective_n``; the same for C(t), pH and
+ORP. Only a minority of the record carries a state, so the idle fraction is reported as bounds (inactive over all bins;
+inactive, unclassified and artifact over all bins) and, CONDITIONAL on the classified bins being representative, over
+the classified bins only when they cover at least half of the interval. The classification uses the NH4
 slope, so comparing NH4 consumption between full states is circular. The association test therefore partitions the
 bins by ORP and pH alone (``INDICATOR_PARTITIONS``) and compares the NH4 consumption between those groups with
 moving-block bootstrap intervals whose block length covers the slope window and the autocorrelation of the response.
@@ -29,6 +35,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import theilslopes
 
+from . import model
 from . import segments as S
 from .config import Config
 from .constants import F_C_PER_MOL, R_J_PER_MOL_K, T_REF_K
@@ -46,6 +53,10 @@ ORP_REF_MIN_BINS = 100
 ORP_EVENTS_D = (28.89, 30.48)  # dynamics.ORP_ELECTRODE_EVENTS_D (implementation_prompt.md M5 item 3)
 ORP_EVENT_MARGIN_D = (0.05, 0.1)
 CI_ALPHA = 0.95
+RHO_MAX = 0.999  # cap of the lag-1 autocorrelation used to widen the slope intervals (n_eff stays > 0)
+# X2 coverage: the idle fraction over classified time stands for the interval only if the classified bins are the
+# majority of it; below one half, the unknown mix of the bins without a state outweighs them (fixed before the run)
+MIN_CLASSIFIED_FRACTION = 0.5
 N_BOOT = 999
 MIN_BLOCKS_PER_GROUP = 2  # a block bootstrap needs each group to span at least two blocks' worth of bins
 SEED = 20261019
@@ -109,7 +120,9 @@ def rules_table(excluded: set[str]) -> pd.DataFrame:
     rows.append({"state": UNCLASSIFIED, "condition": "slope window crosses an artifact, NH4 rising (no N source), "
                  "consumption with a rising pH, or no indicator beyond its threshold", "features": "-", "order": 99})
     df = pd.DataFrame(rows).sort_values("order", kind="stable")
-    df["thresholds"] = (f"slope window {(2 * SLOPE_HALF_BINS + 1) * BIN_D:.2f} d (Theil-Sen {100 * CI_ALPHA:g} % interval); "
+    df["thresholds"] = (f"slope window {(2 * SLOPE_HALF_BINS + 1) * BIN_D:.2f} d (Theil-Sen {100 * CI_ALPHA:g} % interval, "
+                        "half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window "
+                        f"residuals, capped at {RHO_MAX}; C(t), pH and ORP alike); "
                         f"pH rising/falling also needs |slope| x window ≥ {PH_QUANTUM} (one quantum); ORP_rel level "
                         f"±{ORP_LEVEL_MV} mV against the centred {2 * ORP_REF_HALF_BINS * BIN_D:g} d median")
     df["excluded_features"] = ", ".join(sorted(excluded)) or "none"
@@ -143,15 +156,37 @@ def artifact_reasons(t_mid: np.ndarray, grid: pd.DataFrame, cfg: Config, jumps: 
 
 
 # --- Features ---------------------------------------------------------------------------------------------------
+def lag1_rho(resid: np.ndarray) -> float:
+    """Lag-1 autocorrelation of residuals clipped to [0, RHO_MAX] (0 when the residuals have no variance)."""
+    e = np.asarray(resid, dtype=float)
+    if len(e) < 3 or np.std(e[:-1]) == 0 or np.std(e[1:]) == 0:
+        return 0.0
+    return min(max(float(np.corrcoef(e[:-1], e[1:])[0, 1]), 0.0), RHO_MAX)
+
+
+def interval_scale(n: int, rho: float) -> float:
+    """√(n/n_eff) with n_eff = n (1 − ρ)/(1 + ρ) (``model.effective_n``); ρ is capped at RHO_MAX, so n_eff > 0."""
+    rho = min(max(rho, 0.0), RHO_MAX)
+    return math.sqrt(n / (n * (1 - rho) / (1 + rho)))
+
+
 def rolling_theil_sen(t: np.ndarray, y: np.ndarray, clean: np.ndarray, half: int = SLOPE_HALF_BINS):
-    """Theil-Sen slope and 95 % interval over the centred window of every bin whose window is wholly clean."""
+    """Theil-Sen slope and autocorrelation-scaled 95 % interval over the centred window of every bin whose window is
+    wholly clean (rows: slope, low, high, lag-1 ρ of the window residuals).
+
+    scipy's interval treats the 2 half + 1 points as independent; each half-width (below and above the slope) is
+    multiplied by √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the residuals about the window's
+    own Theil-Sen line (pre-registered in pass 3, X2)."""
     n = len(t)
-    out = np.full((3, n), np.nan)
+    out = np.full((4, n), np.nan)
     bad = np.concatenate([[0], np.cumsum(~clean | ~np.isfinite(y))])
     for i in range(half, n - half):
         if bad[i + half + 1] - bad[i - half] == 0:
-            r = theilslopes(y[i - half:i + half + 1], t[i - half:i + half + 1], alpha=CI_ALPHA)
-            out[:, i] = (r.slope, r.low_slope, r.high_slope)
+            tt, yy = t[i - half:i + half + 1], y[i - half:i + half + 1]
+            r = theilslopes(yy, tt, alpha=CI_ALPHA)
+            rho = lag1_rho(yy - (r.intercept + r.slope * tt))
+            k = interval_scale(len(tt), rho)
+            out[:, i] = (r.slope, r.slope - k * (r.slope - r.low_slope), r.slope + k * (r.high_slope - r.slope), rho)
     return out
 
 
@@ -199,6 +234,7 @@ def features(grid: pd.DataFrame, truth: pd.DataFrame, reason: np.ndarray) -> pd.
         "nh4_slope_mgN_L_d": nh4[0], "nh4_slope_ci95_low": nh4[1], "nh4_slope_ci95_high": nh4[2],
         "ph_slope_per_d": ph[0], "ph_slope_ci95_low": ph[1], "ph_slope_ci95_high": ph[2],
         "orp_slope_mV_d": orp[0], "orp_slope_ci95_low": orp[1], "orp_slope_ci95_high": orp[2],
+        "nh4_slope_resid_lag1": nh4[3], "ph_slope_resid_lag1": ph[3], "orp_slope_resid_lag1": orp[3],
         "orp_rel_mV": rel, "orp_rel_window_median_mV": window_median(rel, valid),
         "nh4_sign": sign_class(nh4[0], nh4[1], nh4[2]),
         "ph_sign": sign_class(ph[0], ph[1], ph[2], PH_QUANTUM / window_d),
@@ -259,9 +295,16 @@ def interval_bounds(cfg: Config) -> list[tuple[str, float, float]]:
                                                    in enumerate(zip(p, [*p[1:], END_D]), start=1)], ("whole record", T0_D, END_D)]
 
 
-def state_fractions(bins: pd.DataFrame, lo: float, hi: float) -> dict:
-    """Time fractions of each state in [lo, hi); the idle fraction is inactive time over stirred (total) time and over
-    classified time. An interval without any process-state bin yields ``not computed`` instead of a fraction."""
+def state_fractions(bins: pd.DataFrame, lo: float, hi: float, min_classified: float = MIN_CLASSIFIED_FRACTION) -> dict:
+    """Time fractions of each state in [lo, hi) and the idle fraction as a bounded quantity (pass 3, X2):
+
+    - ``idle_fraction_lower_bound`` = inactive bins / all bins;
+    - ``idle_fraction_upper_bound`` = (inactive + unclassified + artifact bins) / all bins (every bin without a positive
+      non-idle state could have been idle);
+    - ``idle_fraction_of_classified_time`` = inactive / classified bins, CONDITIONAL on the classified bins being
+      representative; ``not computed`` (in ``status``) unless ``classified_fraction`` ≥ ``min_classified``.
+
+    The bounds are reported whenever the interval has bins; ``status`` is the status of the conditional value."""
     m = (bins["t_mid_d"] >= lo) & (bins["t_mid_d"] < hi)
     st = bins.loc[m, "state"]
     total = len(st)
@@ -269,14 +312,22 @@ def state_fractions(bins: pd.DataFrame, lo: float, hi: float) -> dict:
     for s in (*STATES, ARTIFACT, UNCLASSIFIED):
         out[f"fraction_{s}"] = float((st == s).sum() / total) if total else np.nan
     classified = int(st.isin(STATES).sum())
+    inactive = int((st == "inactive_oversupplied").sum())
+    out["n_classified"], out["n_inactive_oversupplied"] = classified, inactive
     out["classified_fraction"] = classified / total if total else np.nan
+    out["idle_fraction_lower_bound"] = inactive / total if total else np.nan
+    out["idle_fraction_upper_bound"] = (inactive + int(st.isin((UNCLASSIFIED, ARTIFACT)).sum())) / total if total else np.nan
+    out["bounds_status"] = "computed" if total else "not computed: no bin in this interval"
     if classified == 0:
-        out["idle_fraction_of_stirred_time"] = out["idle_fraction_of_classified_time"] = np.nan
+        out["idle_fraction_of_classified_time"] = np.nan
         out["status"] = "not computed: no bin with a process state in this interval"
+    elif out["classified_fraction"] < min_classified:
+        out["idle_fraction_of_classified_time"] = np.nan
+        out["status"] = (f"not computed: classified fraction {out['classified_fraction']:.3f} below {min_classified:g} "
+                         "(the classified bins are not representative of the interval; see the bounds)")
     else:
-        out["idle_fraction_of_stirred_time"] = float((st == "inactive_oversupplied").sum() / total)
-        out["idle_fraction_of_classified_time"] = float((st == "inactive_oversupplied").sum() / classified)
-        out["status"] = "computed"
+        out["idle_fraction_of_classified_time"] = inactive / classified
+        out["status"] = "computed (CONDITIONAL on the classified bins being representative)"
     return out
 
 
@@ -410,7 +461,13 @@ def compute(cfg: Config, inputs: dict) -> StateResult:
     bins = classify(f)
     bins = bins[bins["t_mid_d"] >= T0_D].reset_index(drop=True)
     fr = pd.DataFrame([{"interval": name, **state_fractions(bins, lo, hi)} for name, lo, hi in interval_bounds(cfg)])
-    return StateResult(bins, timeline(bins), fr, comparisons(bins, cfg), rules_table(excluded), excluded)
+    # X3: every table carrying C(t) quantities (slopes, consumption, states built on them) declares its NH4 basis
+    prov = {"nh4_observation_model": str(inputs["truth"]["nh4_observation_model"].iloc[0]),
+            "nh4_series": str(inputs["truth"]["nh4_truth_id"].iloc[0])}
+    out = [x.assign(**prov) for x in (bins, timeline(bins), fr, comparisons(bins, cfg))]
+    for x in out:
+        model.check_single_observation_model(x, label_cols=())
+    return StateResult(*out, rules_table(excluded), excluded)
 
 
 def load_inputs(out_dir: Path) -> dict:
@@ -446,8 +503,14 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
         "## Time fractions per interval",
         "",
         (f"Over the whole record (day {T0_D:g} to {END_D:g}) {100 * whole['classified_fraction']:.0f} % of the time has a "
-         f"process state; the inactive, over-supplied state takes {100 * whole['idle_fraction_of_stirred_time']:.0f} % of "
-         f"the stirred time ({100 * whole['idle_fraction_of_classified_time']:.0f} % of the classified time)."),
+         f"process state (coverage). The idle fraction (inactive, over-supplied) is bounded: at least "
+         f"{100 * whole['idle_fraction_lower_bound']:.0f} % of the time (inactive bins over all bins) and at most "
+         f"{100 * whole['idle_fraction_upper_bound']:.0f} % (inactive, unclassified and artifact bins over all bins). "
+         f"Over the classified time only, CONDITIONAL on those bins being representative, it is "
+         + (f"{100 * whole['idle_fraction_of_classified_time']:.0f} %" if pd.notna(whole["idle_fraction_of_classified_time"])
+            else f"{whole['status']}")
+         + f" (computed only where the classified fraction is ≥ {MIN_CLASSIFIED_FRACTION:g}). Slope intervals are "
+         "widened for the autocorrelation inside each window (`*_slope_resid_lag1` in `states_bins.parquet`)."),
         "",
         md_table(r.fractions, digits=3),
         "",

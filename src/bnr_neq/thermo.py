@@ -487,29 +487,35 @@ def co2_table(cfg: Config, segments_tab):
 
 OXYGEN_SENSITIVITY_ROLE = ("SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 "
                            "log observation model in nh4_truth_windows.csv")
+# X4: every reading-based column of thermo_oxygen.csv says SENSITIVITY in its name
+OXY_CONS = "consumption_SENSITIVITY_linear_gain_mgN_L_d"
+OXY_DEMAND = "o2_demand_SENSITIVITY_linear_gain_mgO2_L_d"
+OXY_KLA = "kla_required_SENSITIVITY_linear_gain_per_d_SCENARIO_T25C"
+OXY_MARGIN = "kla_measured_over_required_SENSITIVITY_linear_gain"
+OXYGEN_NH4_INDEPENDENT = ("sub_segment", "fit_start_d", "fit_end_d", "governing_pulse", "held_fraction", "status", "role")
 
 
 def oxygen_table(cfg: Config, segments_tab, reference_windows=None, pulses=None):
     """O2 demand from the GAIN-CORRECTED consumption: a labelled SENSITIVITY case since W1."""
     import pandas as pd
 
+    from .model import LINEAR_GAIN, RAW_READING, check_single_observation_model
+    from .segments import GAIN_COL
+
     rows = []
     for r in segments_tab[segments_tab["status"] == "computed"].itertuples(index=False):
-        rate = r.consumption_gain_corrected_mgN_L_d
+        rate = getattr(r, GAIN_COL)
         row = {"sub_segment": int(r.sub_segment), "fit_start_d": r.fit_start_d, "fit_end_d": r.fit_end_d,
-               "governing_pulse": r.governing_pulse, "consumption_gain_corrected_mgN_L_d": rate,
-               "held_fraction": r.held_fraction,
-               "o2_demand_mgO2_L_d_GAIN_CORRECTED": np.nan, "kla_required_per_d_SCENARIO_T25C": np.nan, "status": ""}
+               "governing_pulse": r.governing_pulse, OXY_CONS: rate, "held_fraction": r.held_fraction,
+               OXY_DEMAND: np.nan, OXY_KLA: np.nan, "status": ""}
         if pd.isna(rate):
             row["status"] = r.gain_correction_status
         elif rate <= 0:
             row["status"] = "not computed: non-positive gain-corrected consumption (rising electrode signal)"
         else:
             d = float(oxygen_demand_mgO2_L_d(rate))
-            row.update(o2_demand_mgO2_L_d_GAIN_CORRECTED=d, kla_required_per_d_SCENARIO_T25C=float(required_kla_per_d(d)),
-                       status="computed")
-        row["kla_measured_over_required"] = (_nc(kla_margin_guarded(cfg, row["kla_required_per_d_SCENARIO_T25C"]))
-                                             if row["status"] == "computed" else np.nan)
+            row.update({OXY_DEMAND: d, OXY_KLA: float(required_kla_per_d(d)), "status": "computed"})
+        row[OXY_MARGIN] = (_nc(kla_margin_guarded(cfg, row[OXY_KLA])) if row["status"] == "computed" else np.nan)
         row["role"] = OXYGEN_SENSITIVITY_ROLE
         rows.append(row)
     if reference_windows is not None and pulses is not None:
@@ -519,12 +525,14 @@ def oxygen_table(cfg: Config, segments_tab, reference_windows=None, pulses=None)
         rate = -float(w["exact_window_slope_mgNH4_L_d"]) * cfg.get("sensors.nh4_to_N_factor") / f1
         d = float(oxygen_demand_mgO2_L_d(rate))
         rows.append({"sub_segment": pd.NA, "fit_start_d": 2.69, "fit_end_d": 8.82, "governing_pulse": 1,
-                     "consumption_gain_corrected_mgN_L_d": rate, "held_fraction": np.nan, "o2_demand_mgO2_L_d_GAIN_CORRECTED": d,
-                     "kla_required_per_d_SCENARIO_T25C": float(required_kla_per_d(d)),
+                     OXY_CONS: rate, "held_fraction": np.nan, OXY_DEMAND: d, OXY_KLA: float(required_kla_per_d(d)),
                      "status": "DIAGNOSTIC ONLY: preliminary window 2.59-8.82 spans pulse 1 and three NH4 jumps; "
                                "excluded by the M3 segmentation rule",
-                     "kla_measured_over_required": np.nan, "role": OXYGEN_SENSITIVITY_ROLE})
-    return pd.DataFrame(rows)
+                     OXY_MARGIN: np.nan, "role": OXYGEN_SENSITIVITY_ROLE})
+    out = pd.DataFrame(rows)
+    out["nh4_observation_model"], out["nh4_series"] = LINEAR_GAIN, RAW_READING  # X3: declared basis, checked
+    check_single_observation_model(out, label_cols=("role",), independent_cols=OXYGEN_NH4_INDEPENDENT)
+    return out
 
 
 NH4_BALANCE_START_D, NH4_BALANCE_END_D = 0.8, 47.4  # midpoints of the M2 start and end windows
@@ -655,10 +663,10 @@ M4_REFERENCES = [
     ("coexistence affinity kJ/mol (documented SCENARIO)", 317.0, 2.0),
     ("HCO3- air-equilibrium mmol/L at pH 7.3", 0.127, 0.001),
     ("HCO3- air-equilibrium mmol/L at pH 7.8", 0.401, 0.001),
-    ("O2 demand min mg O2/L/d (GAIN-CORRECTED)", 6.0, 0.6),
-    ("O2 demand max mg O2/L/d (GAIN-CORRECTED)", 33.0, 3.3),
-    ("kLa required min 1/d", 0.7, 0.07),
-    ("kLa required max 1/d", 4.0, 0.4),
+    ("O2 demand min mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis)", 6.0, 0.6),
+    ("O2 demand max mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis)", 33.0, 3.3),
+    ("kLa required min 1/d (SENSITIVITY: linear gain, as in the preliminary analysis)", 0.7, 0.07),
+    ("kLa required max 1/d (SENSITIVITY: linear gain, as in the preliminary analysis)", 4.0, 0.4),
 ]
 
 
@@ -669,8 +677,7 @@ def reference_comparison(steps, coex, co2, oxy):
     vals = [*steps[f"{DELTA_A_READING}_SCENARIO_T25C"].tolist(),
             float(coex.loc[coex["documented_scenario"], "affinity_kJ_mol"].iloc[0]),
             *co2.loc[co2["basis"] == "reference pH", "hco3_air_eq_mmol_L_SCENARIO_T25C"].tolist(),
-            ok["o2_demand_mgO2_L_d_GAIN_CORRECTED"].min(), ok["o2_demand_mgO2_L_d_GAIN_CORRECTED"].max(),
-            ok["kla_required_per_d_SCENARIO_T25C"].min(), ok["kla_required_per_d_SCENARIO_T25C"].max()]
+            ok[OXY_DEMAND].min(), ok[OXY_DEMAND].max(), ok[OXY_KLA].min(), ok[OXY_KLA].max()]
     df = pd.DataFrame(M4_REFERENCES, columns=["quantity", "reference", "tolerance"])
     df["obtained"] = vals
     df["abs_diff"] = (df["obtained"] - df["reference"]).abs()

@@ -11,19 +11,19 @@ Segments start at day 1.0 (start-up excluded) and at each pulse (8.53, 10.57, 24
 | sub_segment | segment | t_start_d | t_end_d | start_boundary | fit_start_d | fit_end_d | n_bins | slope_mgNH4_L_d | slope_ci95_low_mgNH4_L_d | slope_ci95_high_mgNH4_L_d | slope_mgN_L_d | held_fraction | status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 0 | 1 | 2.625 | start | 1.1 | 2.625 | 152 | -1.671 | -1.967 | -1.461 | -1.298 | 0.5245 | computed |
-| 2 | 0 | 2.626 | 3.204 | jump (electrode_offset) | 2.726 | 3.204 | 47 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (baseline window between two electrode steps, fit span 0.48 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
-| 3 | 0 | 3.214 | 3.69 | jump (electrode_offset) | 3.314 | 3.69 | 37 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (baseline window between two electrode steps, fit span 0.38 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
+| 2 | 0 | 2.626 | 3.204 | jump (electrode_offset) | 2.726 | 3.204 | 47 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.48 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
+| 3 | 0 | 3.214 | 3.69 | jump (electrode_offset) | 3.314 | 3.69 | 37 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.38 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 4 | 0 | 3.715 | 3.914 | candidate (unlocated, sustained) | 3.815 | 3.914 | 9 | NaN | NaN | NaN | NaN | 0 | not computed: fit span 0.099 d < 0.25 d |
-| 5 | 0 | 4.079 | 4.818 | candidate (electrode_offset, non-sustained) | 4.179 | 4.818 | 63 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (baseline window between two electrode steps, fit span 0.64 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
+| 5 | 0 | 4.079 | 4.818 | candidate (electrode_offset, non-sustained) | 4.179 | 4.818 | 63 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.64 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 6 | 0 | 4.848 | 5.002 | candidate (unlocated, non-sustained) | 4.948 | 5.002 | 5 | NaN | NaN | NaN | NaN | 0 | not computed: fit span 0.055 d < 0.25 d |
-| 7 | 0 | 5.092 | 5.571 | candidate (unlocated, non-sustained) | 5.192 | 5.571 | 37 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (baseline window between two electrode steps, fit span 0.38 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
+| 7 | 0 | 5.092 | 5.571 | candidate (unlocated, non-sustained) | 5.192 | 5.571 | 37 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.38 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 8 | 0 | 5.571 | 5.873 | jump (electrode_offset) | 5.671 | 5.873 | 19 | NaN | NaN | NaN | NaN | 0 | not computed: fit span 0.201 d < 0.25 d |
-| 9 | 0 | 5.914 | 6.543 | candidate (electrode_offset, non-sustained) | 6.014 | 6.543 | 52 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (baseline window between two electrode steps, fit span 0.53 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
+| 9 | 0 | 5.914 | 6.543 | candidate (electrode_offset, non-sustained) | 6.014 | 6.543 | 52 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.53 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 10 | 0 | 6.547 | 8.53 | jump (electrode_offset) | 6.647 | 8.53 | 188 | 0.9918 | 0.5762 | 1.422 | 0.7702 | 0 | computed |
 | 11 | 1 | 8.53 | 8.552 | pulse 1 | 8.63 | 8.552 | 0 | NaN | NaN | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
 | 12 | 1 | 8.553 | 8.75 | jump (electrode_offset) | 8.653 | 8.75 | 9 | NaN | NaN | NaN | NaN | 0 | not computed: fit span 0.097 d < 0.25 d |
 | 13 | 1 | 8.752 | 8.82 | jump (pulse_response) | 8.852 | 8.82 | 0 | NaN | NaN | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
-| 14 | 1 | 8.858 | 9.269 | jump (pulse_response) | 8.958 | 9.269 | 30 | -8.093 | -9.016 | -6.791 | -6.284 | 0 | computed |
+| 14 | 1 | 8.858 | 9.269 | jump (pulse_response) | 8.958 | 9.269 | 30 | NaN | NaN | NaN | NaN | 0 | not computed: electrode fragment (window between two electrode steps, fit span 0.31 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 15 | 1 | 9.29 | 10.57 | candidate (electrode_offset, non-sustained) | 9.39 | 10.57 | 118 | -2.069 | -2.574 | -1.524 | -1.607 | 0 | computed |
 | 16 | 2 | 10.57 | 10.58 | pulse 2 | 10.67 | 10.58 | 0 | NaN | NaN | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
 | 17 | 2 | 10.58 | 10.88 | jump (pulse_response) | 10.68 | 10.88 | 20 | NaN | NaN | NaN | NaN | 0 | not computed: fit span 0.207 d < 0.25 d |
@@ -36,7 +36,7 @@ Segments start at day 1.0 (start-up excluded) and at each pulse (8.53, 10.57, 24
 | 24 | 4 | 37.22 | 44.66 | jump (electrode_offset) | 37.32 | 44.66 | 734 | -0.2832 | -0.3164 | -0.255 | -0.2199 | 0 | computed |
 | 25 | 4 | 44.66 | 47.92 | jump (electrode_offset) | 44.76 | 47.92 | 315 | 0.1256 | 0.08562 | 0.1693 | 0.09753 | 0 | computed |
 
-Window check: 10 of 10 computed windows contain no pulse and no step-detector candidate (event time or step peak), located or not, sustained or not.
+Window check: 9 of 9 computed windows contain no pulse and no step-detector candidate (event time or step peak), located or not, sustained or not.
 
 ## Held/damped NH4 output inside slope windows
 
@@ -52,7 +52,7 @@ Window check: 10 of 10 computed windows contain no pulse and no step-detector ca
 
 Since W1 the single NH4 observation model is the M6 log model: rates, free ammonia, conversion and oxygen demand are derived from its inverted C(t) in `nh4_truth_windows.csv` (pulses stage). The linear gain correction below is kept only as a labelled sensitivity case. Consumption = −slope (mg N/L/d) / response fraction of the governing pulse (M2). This is conditional on the electrode-gain interpretation of the under-response (S1) and is not an absolute rate (NO-GO until laboratory NH4-N). The interval ignores the uncertainty of the response fraction. A window whose gain-corrected consumption is not positive is `not computed: non-positive gain-corrected consumption (rising electrode signal)` (1 window(s)); its electrode slope is still listed above.
 
-| sub_segment | governing_pulse | response_fraction_governing_pulse | consumption_gain_corrected_mgN_L_d | consumption_gain_corrected_ci95_low_mgN_L_d | consumption_gain_corrected_ci95_high_mgN_L_d | gain_correction_status |
+| sub_segment | governing_pulse | response_fraction_governing_pulse | consumption_SENSITIVITY_linear_gain_mgN_L_d | consumption_SENSITIVITY_linear_gain_ci95_low_mgN_L_d | consumption_SENSITIVITY_linear_gain_ci95_high_mgN_L_d | gain_correction_status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | <NA> | NaN | NaN | NaN | NaN | not computed: no governing pulse (baseline) |
 | 2 | <NA> | NaN | NaN | NaN | NaN | not computed: no governing pulse (baseline) |
@@ -67,7 +67,7 @@ Since W1 the single NH4 observation model is the M6 log model: rates, free ammon
 | 11 | 1 | 0.3704 | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
 | 12 | 1 | 0.3704 | NaN | NaN | NaN | not computed: fit span 0.097 d < 0.25 d |
 | 13 | 1 | 0.3704 | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
-| 14 | 1 | 0.3704 | 16.96 | 14.23 | 18.9 | computed |
+| 14 | 1 | 0.3704 | NaN | NaN | NaN | not computed: electrode fragment (window between two electrode steps, fit span 0.31 d < 3 x the longest delayed electrode response 0.33 d; slope kept as a diagnostic) |
 | 15 | 1 | 0.3704 | 4.338 | 3.195 | 5.395 | computed |
 | 16 | 2 | 0.29 | NaN | NaN | NaN | not computed: fit span 0.000 d < 0.25 d |
 | 17 | 2 | 0.29 | NaN | NaN | NaN | not computed: fit span 0.207 d < 0.25 d |
@@ -88,7 +88,6 @@ The primary free ammonia uses the M6-inverted TAN (`nh4_truth_windows.csv`); the
 | --- | --- | --- | --- | --- | --- |
 | 1 | 1 | 2.625 | 6.92 | 0.1384 | 0.1986 |
 | 10 | 6.547 | 8.53 | 6.87 | 0.04812 | 0.06908 |
-| 14 | 8.858 | 9.269 | 7.029 | 0.2011 | 0.2885 |
 | 15 | 9.29 | 10.57 | 7 | 0.1984 | 0.2847 |
 | 18 | 10.88 | 17.88 | 7.18 | 0.3689 | 0.5289 |
 | 19 | 17.88 | 24.59 | 7.809 | 0.8215 | 1.168 |
@@ -110,11 +109,11 @@ Per segment: shared kinetic parameters, one free initial level per sub-segment (
 | 0 | 1;10 | monod | 340 | 4 | 1.043 | 36.4 | 0.8065 | 1.913e-183 | True | vmax_mgN_L_d;Ks_mgN_L | 2.067 |
 | 0 | 1;10 | haldane_FA_SCENARIO_T20C | 340 | 5 | 1.045 | 39.9 | 0.8071 | 1.243e-183 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 5.572 |
 | 0 | 1;10 | haldane_FA_SCENARIO_T25C | 340 | 5 | 1.045 | 39.89 | 0.8071 | 1.288e-183 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 5.554 |
-| 1 | 14;15 | zero_order | 148 | 3 | 0.8158 | -54.26 | 0.9704 | 3.372e-159 | True |  | 0 |
-| 1 | 14;15 | first_order | 148 | 3 | 0.8194 | -52.95 | 0.9706 | 5.595e-159 | True |  | 1.317 |
-| 1 | 14;15 | monod | 148 | 4 | 0.8158 | -52.26 | 0.9704 | 3.372e-159 | True | vmax_mgN_L_d;Ks_mgN_L | 2 |
-| 1 | 14;15 | haldane_FA_SCENARIO_T20C | 148 | 5 | 0.8097 | -52.49 | 0.97 | 3.039e-159 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 1.77 |
-| 1 | 14;15 | haldane_FA_SCENARIO_T25C | 148 | 5 | 0.8097 | -52.49 | 0.97 | 3.036e-159 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 1.772 |
+| 1 | 15 | zero_order | 118 | 2 | 0.8907 | -23.32 | 0.9739 | 5.097e-127 | True |  | 0 |
+| 1 | 15 | first_order | 118 | 2 | 0.8938 | -22.48 | 0.9741 | 5.408e-127 | True |  | 0.8342 |
+| 1 | 15 | monod | 118 | 3 | 0.8907 | -21.32 | 0.9739 | 5.098e-127 | True | vmax_mgN_L_d;Ks_mgN_L | 2 |
+| 1 | 15 | haldane_FA_SCENARIO_T20C | 118 | 4 | 0.8838 | -21.16 | 0.9735 | 6.536e-127 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 2.161 |
+| 1 | 15 | haldane_FA_SCENARIO_T25C | 118 | 4 | 0.8838 | -21.16 | 0.9735 | 6.532e-127 | True | vmax_mgN_L_d;Ks_mgNH3_L;Ki_mgNH3_L | 2.163 |
 | 2 | 18;19 | zero_order | 1349 | 3 | 1.799 | 1591 | 0.9975 | 0 | True |  | 778.3 |
 | 2 | 18;19 | first_order | 1349 | 3 | 1.419 | 950.1 | 0.9958 | 0 | True |  | 137.5 |
 | 2 | 18;19 | monod | 1349 | 4 | 1.42 | 954.3 | 0.9958 | 0 | True | vmax_mgN_L_d;Ks_mgN_L | 141.7 |
@@ -145,16 +144,16 @@ Lowest AIC per segment (not a model selection): segment 0: first_order, segment 
 | 0 | haldane_FA_SCENARIO_T25C | vmax_mgN_L_d | 9992 | 1.635e+04 | False | at bound; relative SE 1.6e+04 > 1.0; ill-conditioned |
 | 0 | haldane_FA_SCENARIO_T25C | Ks_mgNH3_L | 2978 | 1.635e+04 | False | relative SE 1.6e+04 > 1.0; ill-conditioned |
 | 0 | haldane_FA_SCENARIO_T25C | Ki_mgNH3_L | 828.6 | 82.79 | False | relative SE 83 > 1.0; ill-conditioned |
-| 1 | zero_order | k0_mgN_L_d | 1.928 | 0.1146 | True |  |
-| 1 | first_order | k1_per_d | 0.04671 | 0.1169 | True |  |
-| 1 | monod | vmax_mgN_L_d | 1.928 | 0.115 | False | ill-conditioned |
-| 1 | monod | Ks_mgN_L | 1.894e-05 | 5.448e-08 | False | ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T20C | vmax_mgN_L_d | 1e+04 | 4.063e+04 | False | at bound; relative SE 4.1e+04 > 1.0; ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T20C | Ks_mgNH3_L | 9.018e-05 | 638.9 | False | relative SE 6.4e+02 > 1.0; ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T20C | Ki_mgNH3_L | 3.877e-05 | 4.063e+04 | False | relative SE 4.1e+04 > 1.0; ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T25C | vmax_mgN_L_d | 9936 | 4.024e+04 | False | relative SE 4e+04 > 1.0; ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T25C | Ks_mgNH3_L | 4.083e-06 | 0 | False | ill-conditioned |
-| 1 | haldane_FA_SCENARIO_T25C | Ki_mgNH3_L | 5.599e-05 | 4.025e+04 | False | relative SE 4e+04 > 1.0; ill-conditioned |
+| 1 | zero_order | k0_mgN_L_d | 1.862 | 0.1304 | True |  |
+| 1 | first_order | k1_per_d | 0.04513 | 0.1328 | True |  |
+| 1 | monod | vmax_mgN_L_d | 1.862 | 0.131 | False | ill-conditioned |
+| 1 | monod | Ks_mgN_L | 3.391e-06 | 1.23e-08 | False | ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T20C | vmax_mgN_L_d | 9969 | 4.814e+04 | False | relative SE 4.8e+04 > 1.0; ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T20C | Ks_mgNH3_L | 0.001088 | 428.5 | False | relative SE 4.3e+02 > 1.0; ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T20C | Ki_mgNH3_L | 3.758e-05 | 4.815e+04 | False | relative SE 4.8e+04 > 1.0; ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T25C | vmax_mgN_L_d | 9956 | 4.905e+04 | False | relative SE 4.9e+04 > 1.0; ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T25C | Ks_mgNH3_L | 2.799e-05 | 168.4 | False | relative SE 1.7e+02 > 1.0; ill-conditioned |
+| 1 | haldane_FA_SCENARIO_T25C | Ki_mgNH3_L | 5.399e-05 | 4.906e+04 | False | relative SE 4.9e+04 > 1.0; ill-conditioned |
 | 2 | zero_order | k0_mgN_L_d | 0.998 | 0.02522 | True |  |
 | 2 | first_order | k1_per_d | 0.02711 | 0.0173 | True |  |
 | 2 | monod | vmax_mgN_L_d | 272.2 | 17.74 | False | relative SE 18 > 1.0 |
@@ -382,8 +381,8 @@ Each grid series is linearly detrended over the common window; normalized power 
 | slope_mgNH4_L_d 32.36-37.19 (production sub-segment) | -0.31 | -0.2963 | 0.05 | 0.01374 | True | fit window 32.496 to 37.219 d; exact window gives -0.304 |
 | slope_mgNH4_L_d 37.19-44.63 (production sub-segment) | -0.28 | -0.2832 | 0.05 | 0.003188 | True | fit window 37.319 to 44.660 d; exact window gives -0.282 |
 | slope_mgNH4_L_d 44.63-47.92 (production sub-segment) | 0.12 | 0.1256 | 0.05 | 0.005608 | True | fit window 44.760 to 47.920 d; exact window gives 0.115 |
-| consumption_gain_corrected_mgN_L_d after pulse 2 | 5.2 | 5.191 | 0.52 | 0.008925 | True | sub-segment 18 (10.983 to 17.875 d); tolerance: 10 % (reference says 'about') |
-| consumption_gain_corrected_mgN_L_d after pulse 4 | 1.4 | 1.319 | 0.14 | 0.08066 | True | sub-segment 23 (32.496 to 37.219 d); tolerance: 10 % (reference says 'about') |
+| consumption_SENSITIVITY_linear_gain_mgN_L_d after pulse 2 | 5.2 | 5.191 | 0.52 | 0.008925 | True | sub-segment 18 (10.983 to 17.875 d); tolerance: 10 % (reference says 'about') |
+| consumption_SENSITIVITY_linear_gain_mgN_L_d after pulse 4 | 1.4 | 1.319 | 0.14 | 0.08066 | True | sub-segment 23 (32.496 to 37.219 d); tolerance: 10 % (reference says 'about') |
 | free ammonia min, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis) | 0.7 | 0.7016 | 0.05 | 0.001629 | True | range of sub-segment medians; tolerance: rounding of the reference to 0.1 |
 | free ammonia max, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis) | 1.2 | 1.168 | 0.05 | 0.03195 | True | range of sub-segment medians; tolerance: rounding of the reference to 0.1 |
 | max Lomb-Scargle normalized power (periodicity band) | 0.05 | 0.05157 | 0.01 | 0.001572 | True | ORP at 0.346 c/d; full band max 0.628; tolerance: 0.01 (reference says 'about') |

@@ -61,8 +61,8 @@ TABLE_DESCRIPTIONS = {
     "ec_late_pulses.csv": "M2: late conductivity pulses with decay fits",
     "ec_late_pulse_sensitivity.csv": "M2: late-pulse count against threshold",
     "clock_check.csv": "M2 (corrected in M3): step timing at the day-2.89 multi-probe event",
-    "segments.csv": ("M3: sub-segments, Theil-Sen slopes of the reading, held fraction; gain-corrected consumption and "
-                     "reading-as-TAN free ammonia (SENSITIVITY since W1)"),
+    "segments.csv": ("M3: sub-segments, Theil-Sen slopes of the reading, held fraction; linear-gain consumption and "
+                     "reading-as-TAN free ammonia (SENSITIVITY in the column names since W1/X4); R8 electrode fragments"),
     "segments_window_check.csv": "M3: no slope window contains a pulse or any NH4 step candidate",
     "segments_reference_windows.csv": "M3: slopes on the exact preliminary windows (diagnostic)",
     "segments_references.csv": "M3: reference comparison",
@@ -76,7 +76,7 @@ TABLE_DESCRIPTIONS = {
     "thermo_chloride_scenarios.csv": "M4: bare-Ag chloride SCENARIOS",
     "thermo_chloride_observed.csv": "M4: observed ORP/pH changes and the oxide alternative",
     "thermo_co2.csv": "M4: air-equilibrium bicarbonate",
-    "thermo_oxygen.csv": "M4: oxygen demand and required kLa under the linear gain model (SENSITIVITY since W1)",
+    "thermo_oxygen.csv": "M4: oxygen demand and required kLa under the linear gain model (SENSITIVITY in the names)",
     "balance_nitrogen.csv": "M4: nitrogen balance",
     "balance_chloride.csv": "M4: chloride balance",
     "balance_alkalinity.csv": "M4: alkalinity balance, with the W2 bound and V(t) scenarios",
@@ -92,8 +92,10 @@ TABLE_DESCRIPTIONS = {
     "dynamics_stability.csv": "M5: stability indicators before each pulse (exploratory)",
     "dynamics_flux.csv": "M5: probability-flux circulation",
     "dynamics_electrode.csv": "M5: electrode-dynamics guard",
-    "model_fit.csv": "M6: model comparison and out-of-sample skill",
-    "model_identifiability.csv": "M6: profile-likelihood identifiability",
+    "model_fit.csv": ("M6/W5: model comparison under one convergence policy: convergence, selection status, "
+                      "out-of-sample skill, fitted Alk0 and its profile interval"),
+    "model_calibration_starts.csv": "X1: every start of the convergence policy per candidate (diagnostic)",
+    "model_identifiability.csv": "M6: profile-likelihood identifiability (with one-sided crossings)",
     "model_checks.csv": "M6: mass-balance and σ consistency checks",
     "model_response_fractions.csv": "M6: model-implied against observed response fractions",
     "nh4_truth_summary.csv": "W1: the single NH4 observation model, its inverted C(t) and band",
@@ -103,10 +105,12 @@ TABLE_DESCRIPTIONS = {
     "nh4_truth_w2_consistency.csv": "S2: per checkpoint, the Alk0 the C(t)-implied removal needs, and the verdict",
     "volume_constraints.csv": "W8: data constraints on the net water loss and the evaporation SCENARIOS checked",
     "states_rules.csv": "W3: the pre-registered state rules, thresholds and excluded sensor features",
-    "states_fractions.csv": "W3: time fraction of each state and the idle fraction per pulse interval",
+    "states_fractions.csv": ("W3: time fraction of each state; idle fraction as bounds with its coverage, and the "
+                             "CONDITIONAL value over classified time where coverage ≥ 0.5"),
     "states_timeline.csv": "W3: time-ordered runs of one process state",
     "states_comparison.csv": "W3: NH4 consumption between indicator groups, block-bootstrap intervals",
-    "pulses.csv": "M7/W4: pulse-level metrics (η, removal, O2, energy family, idle fraction) with inputs and status",
+    "pulses.csv": ("M7/W4: pulse-level metrics (η, removal, O2, energy family, idle-fraction bounds and coverage) with "
+                   "inputs and status"),
     "pulses_associations.csv": "M7: exploratory associations",
     "all_references.csv": "M8: every reference value of the implementation prompt",
 }
@@ -168,15 +172,17 @@ def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
         ("MODEL-BASED quantities (η, model rates) are conditional on the selected M6 model; C0 and the electrode "
         "intercept are not identifiable."),
         ("Process states (W3): pre-registered rules on the 1.01 d Theil-Sen slopes of C(t), pH and ORP and on ORP "
-         "relative to its centred 5 d median (±15 mV); relative ORP assumes a slowly varying bare-Ag reference; QC-flagged "
-         "bins carry no state."),
-        ("Energy (W4): kLa_O2 and the field aeration efficiency SAE are SCENARIO ranges (SAE source: "
-         f"{cfg.get('scenarios.sae_source')}); the O2 supply is a capacity at DO = 0 while DO is not measured; stirrer "
-         "power is a laboratory-specific term only."),
+         "relative to its centred 5 d median (±15 mV); the slope intervals are widened by √(n/n_eff) for the lag-1 "
+         "autocorrelation of each window's residuals; relative ORP assumes a slowly varying bare-Ag reference; QC-flagged "
+         "bins carry no state. The idle fraction is reported as bounds with the classified fraction (coverage)."),
+        ("Energy (W4): kLa_O2 and the field (process-water) aeration efficiency AE are SCENARIO ranges (AE source: "
+         f"{cfg.get('scenarios.sae_source')}); the O2 supply is a capacity at DO = 0 while DO is not measured, whereas "
+         "the AE values are defined at about 2 mg/L DO; stirrer power is a laboratory-specific term only."),
         ("Model candidates (W5): alkalinity limitation uses the model's own alkalinity state (2 eq/mol N, nothing added) "
          "with K_ALK = 0.5 meq/L fixed (ASM3)."),
-        ("Electrode fragments (R8): a baseline slope window between two electrode steps shorter than 3 x the longest "
-         "delayed electrode response is a diagnostic, not a rate."),
+        ("Electrode fragments (R8): a slope window between two electrode steps (offset jumps, pulse-response jumps or "
+         "step candidates) shorter than 3 x the longest delayed electrode response is a diagnostic, not a rate, whether "
+         "or not a pulse governs it; the pulse rates with the fragments are an R8 CASE in `pulses.csv`."),
     ]
 
 
@@ -283,8 +289,11 @@ def status_labels(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     ph_txt = (f"pH-rising minus non-rising bins {float(ph_test['diff'].iloc[0]):+.2f} mg N/L/d "
               f"(95 % block bootstrap {float(ph_test['ci95_low'].iloc[0]):+.2f} to {float(ph_test['ci95_high'].iloc[0]):+.2f})"
               if len(ph_test) and ph_test["status"].iloc[0] == "computed" else "pH test not computed")
-    sae = sorted({float(m.split("_SAE")[1].split("_")[0]) for m in t["pulses.csv"]["metric"]
-                  if str(m).startswith("aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE")})
+    sae = ae_levels(t["pulses.csv"])
+    fit = t["model_fit.csv"]
+    conv = fit["cal_converged"].astype(str).str.lower().eq("true")
+    sel = fit.loc[fit["selected"].astype(str).str.lower().eq("true"), "model"]
+    alk = fit[fit["model"].astype(str).str.startswith("alkalinity")]
     vc = t["volume_constraints.csv"]
     e_min = vc.loc[vc["constraint"] == "N conservation over every pulse", "value_mL_per_d"]
     rows = [
@@ -299,12 +308,26 @@ def status_labels(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
          + " Every C(t)-derived row carries `w2_bound_check`.",
          "Blocked by: lab_NH4_N_mg_L, initial_alkalinity_meq_L, NO3_N_mg_L (resolve level, Alk0, sink)."),
         ("Process states from relative ORP, pH and C(t) (W3)", "GO WITH DOCUMENTED NON-BLOCKING DEBT",
-         (f"{100 * fr['classified_fraction']:.0f} % of the record carries a state; idle (inactive, over-supplied) "
-          f"{100 * fr['idle_fraction_of_stirred_time']:.0f} % of stirred time; {ph_txt}."),
+         (f"{100 * fr['classified_fraction']:.0f} % of the record carries a state (autocorrelation-scaled slope "
+          f"intervals); {ph_txt}."),
          "Debt: low coverage (held NH4 output, electrode steps); relative ORP assumes a slowly varying reference."),
+        ("Idle fraction of stirred time (W3 into W4)", "BOUNDS ONLY; NO-GO for a single value",
+         (f"Between {100 * fr['idle_fraction_lower_bound']:.0f} and {100 * fr['idle_fraction_upper_bound']:.0f} % of "
+          f"the stirred time (whole record) at a coverage of {100 * fr['classified_fraction']:.0f} % classified; the "
+          "CONDITIONAL value over classified time: "
+          + (f"{100 * fr['idle_fraction_of_classified_time']:.0f} %" if pd.notna(fr["idle_fraction_of_classified_time"])
+             else str(fr["status"]).split(" (")[0]) + "."),
+         "Blocked by: coverage (held NH4 output, electrode steps), DO_mg_L."),
+        ("Model selection, activity decay against alkalinity limitation (M6, W5)",
+         "GO WITH DOCUMENTED NON-BLOCKING DEBT" if conv.all() else "QUALIFIED: unconverged candidates excluded",
+         (f"{int(conv.sum())} of {len(fit)} calibrations converged under one policy; selected {', '.join(sel)}"
+          + (f"; fitted Alk0 of the alkalinity candidates {alk['alk0_fitted_meq_L'].astype(float).min():.1f}-"
+             f"{alk['alk0_fitted_meq_L'].astype(float).max():.1f} meq/L against an S2 requirement of "
+             f"{float(cons['alk0_required_if_nitrified_meq_L'].max()):.1f} meq/L" if len(alk) else "") + "."),
+         "Debt: four pulses; time is confounded with decay, alkalinity loss, FA and electrode drift; Alk0 not measured."),
         ("Oxygen demand and aeration-equivalent energy (W4)", "SCENARIO FAMILY COMPUTED; NO-GO for absolute values",
-         (f"O2 demand 4.57 g O2/g N on the removal of C(t); SAE {min(sae):g}-{max(sae):g} kg O2/kWh and kLa_O2 SCENARIOS; "
-          f"demand floor {4.57 / max(sae):.2f}-{4.57 / min(sae):.2f} kWh/kg N."),
+         (f"O2 demand 4.57 g O2/g N on the removal of C(t); field AE {min(sae):g}-{max(sae):g} kg O2/kWh and kLa_O2 "
+          f"SCENARIOS; demand floor {4.57 / max(sae):.2f}-{4.57 / min(sae):.2f} kWh/kg N."),
          "Blocked by: DO_mg_L, kLa_per_d, temperature_C_measured; QUALIFIED by S2 from pulse 2 on."),
         ("Closed 100 mL frame (W8)", "NO-GO",
          (f"Conditional on C(t), N conservation needs a net water loss ≥ {float(e_min.iloc[0]):.2f} mL/d"
@@ -348,6 +371,12 @@ def status_labels(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["conclusion", "status", "evidence", "missing items / debt"])
 
 
+def ae_levels(pm: pd.DataFrame) -> list[float]:
+    """The field aeration-efficiency (AE) SCENARIO levels present in pulses.csv."""
+    return sorted({float(m.split("_AE")[1].split("_")[0]) for m in pm["metric"]
+                   if str(m).startswith("aeration_energy_demand_kWh_per_kgN_SCENARIO_AE")})
+
+
 def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
     """Compact per-pulse view of the W4 metric family (constant volume; SCENARIO ranges in the column names)."""
     def get(metric):
@@ -355,8 +384,7 @@ def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
         return r["value"].where(r["status"] == "computed")
 
     klas = sorted({float(m.split("_kLa")[1].split("_")[0]) for m in pm["metric"] if str(m).startswith("o2_utilization_SCENARIO_kLa")})
-    saes = sorted({float(m.split("_SAE")[1].split("_")[0]) for m in pm["metric"]
-                   if str(m).startswith("aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE")})
+    saes = ae_levels(pm)
     mid = saes[len(saes) // 2]
     out = pd.DataFrame({"pulse": sorted(pm["pulse"].unique())}).set_index("pulse")
     out["η"] = get("eta_conversion_fraction")
@@ -365,17 +393,19 @@ def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
     out["O2 required (mg O2)"] = get("o2_required_mgO2")
     for k in klas:
         out[f"O2 utilization, kLa {k:g}/d"] = get(f"o2_utilization_SCENARIO_kLa{k:g}_T25C")
-    out[f"kWh/kg N floor, SAE {max(saes):g}-{min(saes):g}"] = [
+    out[f"kWh/kg N floor, AE {max(saes):g}-{min(saes):g}"] = [
         f"{a:.2f}-{b:.2f}" if pd.notna(a) else "not computed"
-        for a, b in zip(get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{max(saes):g}"),
-                        get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{min(saes):g}"))]
+        for a, b in zip(get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_AE{max(saes):g}"),
+                        get(f"aeration_energy_demand_kWh_per_kgN_SCENARIO_AE{min(saes):g}"))]
     for k in klas:
-        out[f"kWh/kg N supply, SAE {mid:g}, kLa {k:g}/d"] = get(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{mid:g}_kLa{k:g}_T25C")
-    out["idle fraction (stirred time)"] = get("idle_fraction_of_stirred_time")
-    out["relaxation time / pulse interval"] = get("relaxation_time_over_pulse_interval")
+        out[f"kWh/kg N supply, AE {mid:g}, kLa {k:g}/d"] = get(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_AE{mid:g}_kLa{k:g}_T25C")
+    lo_, hi_, cov = get("idle_fraction_LOWER_BOUND"), get("idle_fraction_UPPER_BOUND"), get("classified_fraction")
+    out["idle fraction: bounds (coverage)"] = [
+        f"{a:.2f}-{b:.2f} ({c:.2f})" if pd.notna(a) and pd.notna(b) else "not computed" for a, b, c in zip(lo_, hi_, cov)]
+    out["dose-removal time / pulse interval"] = get("dose_removal_time_over_pulse_interval")
     k10 = klas[len(klas) // 2]
-    out[f"ΔG released / aeration energy, SAE {mid:g}, kLa {k10:g}/d"] = get(
-        f"gibbs_to_aeration_energy_supply_SCENARIO_SAE{mid:g}_kLa{k10:g}_T25C")
+    out[f"ΔG released / aeration energy, AE {mid:g}, kLa {k10:g}/d"] = get(
+        f"gibbs_to_aeration_energy_supply_SCENARIO_AE{mid:g}_kLa{k10:g}_T25C")
     out["W2 check"] = pm.groupby("pulse")["w2_bound_check"].agg(
         lambda s: "QUALIFIED" if s.astype(str).str.startswith("QUALIFIED").any() else "consistent")
     return out.astype(object).where(out.notna(), "n.c.").reset_index()  # n.c.: not computed, reason in pulses.csv
@@ -383,7 +413,7 @@ def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
 
 def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     """The one-page process summary; every number from a generated table."""
-    from . import alkalinity
+    from . import alkalinity, states
 
     pm = t["pulses.csv"]
     v = t["sensor_verdicts.csv"].set_index("key")["verdict"].astype(str)
@@ -401,20 +431,40 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
         r = pm[pm["metric"] == metric].set_index("pulse")
         return {int(k): (float(x) if s == "computed" else None) for k, x, s in zip(r.index, r["value"], r["status"])}
 
-    eta, relax = val("eta_conversion_fraction"), val("relaxation_time_over_pulse_interval")
+    eta, relax = val("eta_conversion_fraction"), val("dose_removal_time_over_pulse_interval")
+    eta_mb, gap = val("eta_conversion_fraction_MODEL_BASED"), val("eta_gap_inversion_misfit_MODEL_BASED")
+    ratio = val("removal_to_dose_ratio")
+    qualified = sorted({int(k) for k, q in zip(pm["pulse"], pm["w2_bound_check"].fillna("").astype(str)) if q.startswith("QUALIFIED")})
     saes = sorted(float(x) for x in cfg.get("scenarios.sae_field_kgO2_per_kWh"))
     klas = sorted(float(x) for x in cfg.get("scenarios.kLa_O2_per_d"))
     s_mid, k_mid = saes[len(saes) // 2], klas[len(klas) // 2]
-    sup = val(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{s_mid:g}_kLa{k_mid:g}_T25C")
-    idle = val("idle_fraction_of_stirred_time")
+    sup = val(f"aeration_energy_supply_kWh_per_kgN_SCENARIO_AE{s_mid:g}_kLa{k_mid:g}_T25C")
+    idle_lo, idle_hi, cov = val("idle_fraction_LOWER_BOUND"), val("idle_fraction_UPPER_BOUND"), val("classified_fraction")
+    idle_txt = ", ".join(f"P{k} " + (f"{idle_lo[k]:.2f}-{idle_hi[k]:.2f} (coverage {cov[k]:.2f})"
+                                     if idle_lo.get(k) is not None and idle_hi.get(k) is not None else "n.c.")
+                         for k in idle_lo)
     fmt_d = lambda dct, f="{:.2f}": ", ".join(f"P{k} " + (f.format(x) if x is not None else "n.c.") for k, x in dct.items())
     fr = t["states_fractions.csv"].set_index("interval")
     whole = fr.loc["whole record"]
     sc = t["states_comparison.csv"].set_index("comparison")
     fit = t["model_fit.csv"]
     sel = fit.loc[fit["selected"].astype(bool)].iloc[0]
+    conv = fit["cal_converged"].astype(str).str.lower().eq("true")
     alk_models = fit[fit["model"].astype(str).str.startswith("alkalinity")]
-    best_alk = alk_models.loc[alk_models["sel_rmse_log"].idxmin()] if len(alk_models) else None
+    alk_conv = alk_models[conv[alk_models.index]]
+    best_alk = alk_conv.loc[alk_conv["sel_rmse_log"].idxmin()] if len(alk_conv) else None
+    decay = fit[(fit["model"] == "biomass_decay") & conv].iloc[0] if ((fit["model"] == "biomass_decay") & conv).any() else None
+    rival = decay if best_alk is not None and str(sel["model"]).startswith("alkalinity") else best_alk
+    open_up = str(ts.get("band_high_open", "False")) == "True"
+
+    alk_cmp = alk0_comparison(fit, t["nh4_truth_w2_consistency.csv"])
+    cal_end = [c for c in alk_cmp.columns if c.startswith("S2 requirement at pre_pulse")]
+    cal_end = cal_end[0].removeprefix("S2 requirement at ").removesuffix(" (meq/L)") if cal_end else "end"
+
+    def alk0_txt(r):
+        ci = (f" (95 % profile {float(r['alk0_ci95_low_meq_L']):.1f}-{float(r['alk0_ci95_high_meq_L']):.1f})"
+              if str(r["alk0_profile_status"]) == "identifiable" else f" ({r['alk0_profile_status']})")
+        return f"{r['model']} {float(r['alk0_fitted_meq_L']):.1f} meq/L{ci}"
     vc = t["volume_constraints.csv"].set_index("constraint")
     e_min = float(vc.loc["N conservation over every pulse", "value_mL_per_d"])
     e_max = float(vc.loc[vc.index.str.startswith("liquid present"), "value_mL_per_d"].iloc[0])
@@ -432,8 +482,10 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          f"level is not identifiable: {float(ts['C_inv_start_median_mgN_L']):.0f} mg N/L at day 1 (band "
          f"{float(ts['C_inv_start_band_low_mgN_L']):.0f}-{float(ts['C_inv_start_band_high_mgN_L']):.0f}) and "
          f"{float(ts['C_inv_end_median_mgN_L']):.0f} at day 47.9 (band {float(ts['C_inv_end_band_low_mgN_L']):.0f}-"
-         f"{float(ts['C_inv_end_band_high_mgN_L']):.0f}, open upward), against an electrode reading of "
-         f"{float(ts['reading_end_median_mgN_L']):.0f} mg N/L at the end."),
+         f"{float(ts['C_inv_end_band_high_mgN_L']):.0f})"
+         + (", and the band is open upward over the whole series (the data do not bound the level from above; its "
+            "upper edge is only the last evaluated profile vector)" if open_up else "")
+         + f", against an electrode reading of {float(ts['reading_end_median_mgN_L']):.0f} mg N/L at the end."),
         (f"3. **Alkalinity caps nitrification.** Nothing but NH4Cl was added, so nitrification (2 eq/mol N) is bounded by "
          f"the initial alkalinity and the pH record: by day 47.9 at most {n5:.0f} mg N/L for Alk0 = 5 meq/L and "
          f"{n15:.0f} mg N/L for 15 meq/L, against {dosed:.0f} mg N/L dosed. Unless Alk0 was high, most of the dose stayed "
@@ -445,12 +497,23 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          f"meq/L there), if Alk0 exceeds 15 meq/L, or if a sink releasing 1 eq/mol N (NH3 stripping from the open, "
          f"stirred vessel; ≥ {end['alk0_required_any_proton_sink_meq_L']:.1f} meq/L) took part. Every C(t)-derived "
          "number from pulse 2 on is therefore QUALIFIED (`w2_bound_check`)."),
-        (f"5. **Conversion per pulse and relaxation.** η = {fmt_d(eta)} (fraction of each dose removed before the "
-         "next; n.c. = not computed, e.g. a negative removal on C(t)). The time to remove one dose at the post-pulse "
-         f"rate, relative to the pulse interval, was {fmt_d(relax, '{:.1f}')}"
-         + ("; every dose arrived before the previous one could be removed at that rate, so TAN accumulated and the "
-            "batch was driven away from its inactive reference." if relax and all(x is not None and x > 1
-                                                                                     for x in relax.values()) else ".")),
+        (f"5. **Conversion per pulse and dose-removal time.** η = {fmt_d(eta)} (fraction of each dose removed before "
+         "the next; n.c. = not computed, e.g. a negative removal on C(t) or a removal above the dose). The time to "
+         "remove one dose at the post-pulse rate (a ratio of observed quantities, not a fitted relaxation constant), "
+         f"relative to the pulse interval, was {fmt_d(relax, '{:.1f}')}"
+         + (("; every dose arrived before the previous one could be removed at that rate, so, on the QUALIFIED C(t) "
+             f"(pulses {', '.join(str(k) for k in qualified)} contradict the W2 bound, point 4), TAN accumulated and "
+             "the batch was driven away from its inactive reference." if qualified else
+             "; every dose arrived before the previous one could be removed at that rate, so TAN accumulated and the "
+             "batch was driven away from its inactive reference.")
+            if relax and all(x is not None and x > 1 for x in relax.values()) else ".")
+         + f" The MODEL-BASED η of the selected rate law is {fmt_d(eta_mb, '{:.3f}')}, against a dose-anchored "
+         f"removal per dose of {fmt_d(ratio)}. Both use the same observation model, and the model state obeys its own "
+         "mass balance, so the difference is the decline over each interval of the misfit between the inverted C(t) "
+         f"and the simulated state, per dose: {fmt_d(gap)} (`eta_gap_inversion_misfit_MODEL_BASED`). The rate law "
+         "does not follow the fast post-pulse fall of the reading (its residuals are strongly autocorrelated), and "
+         "the inversion assigns that misfit to removal; neither value is the better estimate while C0 and the "
+         "intercept are not identifiable."),
         (f"6. **Process state.** Pre-registered rules give a state to {100 * whole['classified_fraction']:.0f} % of the "
          f"record ({100 * whole['fraction_active_nitrification']:.0f} % active nitrification, "
          f"{100 * whole['fraction_inactive_oversupplied']:.0f} % inactive and over-supplied, "
@@ -460,21 +523,39 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          f"NH4-free indicator groups, NH4 consumption differs by: pH rising vs not {cmp_txt('pH rising vs not rising (within pulse intervals)')}; "
          f"ORP low vs high {cmp_txt('ORP_rel low vs high (within pulse intervals)')}. No indicator separates the "
          "consumption reliably; these are associations, not causes."),
-        (f"7. **Mechanism.** The chronological split selects **{sel['model']}** (selection skill "
-         f"{float(sel['sel_skill_vs_null']):.3f}, test skill {float(sel['test_skill_vs_null']):.3f})"
-         + (f"; the best alkalinity-limited candidate (W5), {best_alk['model']}, scores "
-            f"{float(best_alk['sel_skill_vs_null']):.3f} on selection, {float(best_alk['test_skill_vs_null']):.3f} on test "
-            f"and {float(best_alk['forecast_skill_vs_null']):.3f} on the pure forecast (selected model: "
-            f"{float(sel['forecast_skill_vs_null']):.3f})" + (
-                ", better out of sample than the selected model, so the data do not discriminate activity decay from "
-                "substrate-side (alkalinity) limitation" if float(best_alk['test_skill_vs_null']) > float(sel['test_skill_vs_null'])
-                else "") if best_alk is not None else "")
-         + ". With four pulses, time is confounded with activity decay, alkalinity loss, FA and electrode drift."),
+        (f"7. **Mechanism.** Every candidate was calibrated under one convergence policy (same starts, same evaluation "
+         f"budget); {int(conv.sum())} of {len(fit)} calibrations converged"
+         + (f" ({', '.join(fit.loc[~conv, 'model'])} did not and are excluded from selection, their skills labelled)"
+            if (~conv).any() else "")
+         + f". The chronological split selects **{sel['model']}** (selection skill "
+         f"{float(sel['sel_skill_vs_null']):.3f}, test skill {float(sel['test_skill_vs_null']):.3f}, pure-forecast skill "
+         f"{float(sel['forecast_skill_vs_null']):.3f})"
+         + (f"; the best converged candidate of the other mechanism, {rival['model']}, scores "
+            f"{float(rival['sel_skill_vs_null']):.3f}, {float(rival['test_skill_vs_null']):.3f} and "
+            f"{float(rival['forecast_skill_vs_null']):.3f}"
+            + (" (its Alk0 is open above in the calibration window, i.e. the window shows no alkalinity limitation, so "
+               "the frozen model extrapolates an undiminished activity; every start is in `model_calibration_starts.csv`)"
+               if str(rival.get("alk0_profile_status", "")).startswith("not identifiable")
+               and "high side" in str(rival.get("alk0_profile_status", "")) else "")
+            + (", better out of sample than the selected model, so the data do not discriminate activity decay from "
+               "substrate-side (alkalinity) limitation" if float(rival['test_skill_vs_null']) > float(sel['test_skill_vs_null'])
+               else "") if rival is not None else "")
+         + ". Fitted initial alkalinity of the alkalinity candidates (calibration window, conditional on the model): "
+         + "; ".join(alk0_txt(r) for _, r in alk_models.iterrows())
+         + f". Against the Alk0 that the removal implied by C(t) needs if nitrified (S2, point 4; "
+         f"{float(cons.loc[cal_end, 'alk0_required_if_nitrified_meq_L']):.1f} meq/L at the end of the calibration "
+         f"window, {cal_end}): "
+         + "; ".join(f"{a['model']}: {a['agreement']}" for _, a in alk_cmp.iterrows())
+         + ". An inferred Alk0 is conditional on the rate law, not a measurement. With four pulses, time is confounded "
+         "with activity decay, alkalinity loss, FA and electrode drift."),
         (f"8. **Energy and efficiency.** The transferable energy measure is oxygen: 4.57 g O2 per g N removed, i.e. a "
          f"floor of {4.57 / max(saes):.2f}-{4.57 / min(saes):.2f} kWh/kg N at field aeration efficiencies of "
          f"{max(saes):g}-{min(saes):g} kg O2/kWh (SCENARIO). With aeration sized to kLa_O2 = {k_mid:g} 1/d (SCENARIO) "
-         f"and SAE = {s_mid:g}, the energy per kg N removed is {fmt_d(sup, '{:.1f}')} kWh; the idle fraction of stirred "
-         f"time is {fmt_d(idle)} (Fig. 8; QUALIFIED from pulse 2 on)."),
+         f"and field AE = {s_mid:g}, the energy per kg N removed is {fmt_d(sup, '{:.1f}')} kWh. The idle fraction of "
+         "stirred time is bounded, not measured: only part of each interval carries a process state, so it lies "
+         f"between the inactive share of all bins and that share plus every bin without a state: {idle_txt} (lower-upper "
+         f"bound, classified fraction in brackets; the value over classified time is computed only at a coverage ≥ "
+         f"{states.MIN_CLASSIFIED_FRACTION:g}; Fig. 8c; QUALIFIED from pulse 2 on)."),
         (f"9. **The closed frame is not established.** Conditional on C(t), N conservation over pulse 3 needs a net water "
          f"loss of at least {e_min:.2f} mL/d; liquid was present at the end, so the loss was below {e_max:.2f} mL/d. "
          "Vessel masses would settle it."),
@@ -482,8 +563,47 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     return lines
 
 
+def numeric_cells(df: pd.DataFrame) -> pd.DataFrame:
+    """Cells that read back from CSV as text but hold a number (columns mixing numbers and statuses) become floats,
+    so that ``md_table`` rounds them (X7)."""
+    def conv(v):
+        if isinstance(v, str):
+            try:
+                return float(v)
+            except ValueError:
+                return v
+        return v
+    return df.apply(lambda col: col if pd.api.types.is_numeric_dtype(col) or pd.api.types.is_bool_dtype(col)
+                    else col.astype(object).map(conv))
+
+
+def alk0_comparison(fit: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
+    """Fitted Alk0 of each alkalinity candidate against the S2 requirement at the end of its calibration window
+    (pre_pulse3 for the split from the configured pulses) and at the end of the record."""
+    alk = fit[fit["model"].astype(str).str.startswith("alkalinity")]
+    c = cons.set_index("checkpoint")["alk0_required_if_nitrified_meq_L"].astype(float)
+    cal_end = [k for k in c.index if k.startswith("pre_pulse")][-2] if len(c) > 2 else c.index[0]
+    rows = []
+    for _, r in alk.iterrows():
+        a0 = float(r["alk0_fitted_meq_L"])
+        ok = str(r["cal_converged"]).lower() == "true"
+        req = float(c[cal_end])
+        low = float(r["alk0_ci95_low_meq_L"]) if pd.notna(r["alk0_ci95_low_meq_L"]) else np.nan
+        rows.append({"model": r["model"], "cal_converged": r["cal_converged"], "alk0_fitted_meq_L": a0,
+                     "alk0_ci95_low_meq_L": r["alk0_ci95_low_meq_L"], "alk0_ci95_high_meq_L": r["alk0_ci95_high_meq_L"],
+                     "alk0_profile_status": r["alk0_profile_status"],
+                     f"S2 requirement at {cal_end} (meq/L)": req, "S2 requirement at end (meq/L)": float(c["end"]),
+                     "agreement": ("not comparable: calibration did not converge (the value is not an estimate)" if not ok
+                                   else f"agrees: the 95 % lower profile limit {low:.1f} meq/L is above the requirement"
+                                   if np.isfinite(low) and low >= req else
+                                   "compatible, not a test: the fitted value is above the requirement, but the 95 % "
+                                   "profile reaches below it or is open" if a0 >= req else
+                                   "disagrees: the fitted Alk0 is below the requirement")})
+    return pd.DataFrame(rows)
+
+
 def assemble_report(cfg, out_dir) -> Path:
-    from . import alkalinity, figures
+    from . import alkalinity, figures, model, states
     from .dynamics import onsager_conclusion
 
     out_dir = Path(out_dir)
@@ -525,12 +645,16 @@ def assemble_report(cfg, out_dir) -> Path:
         "## 2. Energy and efficiency",
         "",
         (f"The metric family per pulse (constant volume; all rows with inputs and status in `pulses.csv`). SCENARIO "
-         f"ranges: kLa_O2 = {', '.join(f'{x:g}' for x in sc['kLa_O2_per_d'])} 1/d (not measured); field aeration "
-         f"efficiency SAE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (process-water AE at "
-         "about 2 mg/L DO, not the clean-water standard SAE; fine pore: 3.6-4.8 in clean water against 0.7-2.6 in "
-         "process water), source: "
-         f"{sc['sae_source']}. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
-         "lower bound and the supply-based energy an upper bound. The demand-based energy (4.57/SAE kWh/kg N) is the "
+         f"ranges: kLa_O2 = {', '.join(f'{x:g}' for x in sc['kLa_O2_per_d'])} 1/d (not measured); field (process-water) "
+         f"aeration efficiency AE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (at about 2 "
+         "mg/L DO, not the clean-water standard SAE; fine pore: 3.6-4.8 in clean water against 0.7-2.6 in process "
+         "water; metric suffix `AE`, configuration key `sae_field_kgO2_per_kWh`), source: "
+         f"{sc['sae_source']}. The source's own caveat applies: its table \"should not be used as a general guide line "
+         "and not for design\" (Stenstrom and Rosso 2010, p. 55, as read by the reviewer), so these are scenario "
+         "values only. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
+         "lower bound and the supply-based energy an upper bound; the supply-based energy also divides a capacity at "
+         "DO = 0 by an AE defined at DO = 2 mg/L, an inconsistency that inflates it further. The demand-based energy "
+         "(4.57/AE kWh/kg N) is the "
          "floor that any aeration system must spend on the N actually removed; the supply-based value adds the aeration "
          "spent while the biomass was idle. The stirrer power is a laboratory-specific term (not measured, "
          "`stirrer_power_W` missing)."),
@@ -544,7 +668,14 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         md_table(t["states_rules.csv"][["state", "condition", "features"]], digits=3),
         "",
-        md_table(t["states_fractions.csv"].drop(columns=["status"]), digits=2),
+        ("Idle fraction per interval as bounds with its coverage (`classified_fraction`); the CONDITIONAL value over "
+         f"classified time only where the coverage is ≥ {states.MIN_CLASSIFIED_FRACTION:g} (`status`)."),
+        "",
+        md_table(t["states_fractions.csv"][["interval", "n_bins", "fraction_active_nitrification",
+                                            "fraction_inactive_oversupplied", "fraction_oxygen_limited",
+                                            "fraction_sensor_artifact", "fraction_unclassified", "classified_fraction",
+                                            "idle_fraction_lower_bound", "idle_fraction_upper_bound",
+                                            "idle_fraction_of_classified_time", "status"]], digits=2),
         "",
         md_table(t["states_comparison.csv"][["comparison", "role", "diff", "ci95_low", "ci95_high", "n_a", "n_b",
                                               "block_bins", "status"]], digits=3),
@@ -570,15 +701,25 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         "## 4. Reduced model and mechanism (M6, W5)",
         "",
-        md_table(fit[["model", "n_params_calibration", "sel_rmse_log", "test_rmse_log", "sel_skill_vs_null",
-                      "test_skill_vs_null", "forecast_skill_vs_null", "selected"]], digits=3),
+        (f"Convergence policy (one for every candidate): {model.CONVERGENCE_POLICY} A candidate whose calibration did "
+         "not converge is excluded from selection (`selection_status`); its skills stay in the table and are not "
+         "comparable."),
+        "",
+        md_table(numeric_cells(fit[["model", "n_params_calibration", "cal_converged", "cal_status", "cal_nfev",
+                                    "selection_status", "sel_skill_vs_null", "test_skill_vs_null",
+                                    "forecast_skill_vs_null", "selected"]]), digits=3),
+        "",
+        ("Fitted initial alkalinity of the alkalinity candidates (calibration window, conditional on each model) against "
+         "the Alk0 that the removal implied by C(t) needs (S2, `nh4_truth_w2_consistency.csv`):"),
+        "",
+        md_table(alk0_comparison(fit, t["nh4_truth_w2_consistency.csv"]), digits=3),
         "",
         "Consistency checks of the selected model (true by construction where noted; not findings):",
         "",
-        md_table(t["model_checks.csv"], digits=3),
+        md_table(numeric_cells(t["model_checks.csv"]), digits=3),
         "",
-        md_table(t["model_identifiability.csv"][["parameter", "estimate", "ci95_low", "ci95_high", "identifiable"]],
-                 digits=3),
+        md_table(numeric_cells(t["model_identifiability.csv"][["parameter", "estimate", "ci95_low", "ci95_high",
+                                                                "identifiable"]]), digits=3),
         "",
         fig["fig6_model.png"],
         "## 5. Sensor validity",
@@ -632,7 +773,7 @@ def assemble_report(cfg, out_dir) -> Path:
         "### Consumption slopes on the electrode reading (M3; gain-corrected and reading-as-TAN columns are SENSITIVITY)",
         "",
         md_table(t["segments.csv"][["sub_segment", "fit_start_d", "fit_end_d", "start_boundary", "slope_mgNH4_L_d",
-                                    "held_fraction", "consumption_gain_corrected_mgN_L_d", "status"]], digits=3),
+                                    "held_fraction", "consumption_SENSITIVITY_linear_gain_mgN_L_d", "status"]], digits=3),
         "",
         "### Slope windows of the inverted C(t) (W1)",
         "",

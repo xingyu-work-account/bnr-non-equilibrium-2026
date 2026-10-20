@@ -143,14 +143,15 @@ def stage(cfg, validated, segmented):
 def test_stage_references(stage):
     r = stage["references"].set_index("quantity")
     failing = sorted(r.index[~r["pass"]])
-    assert failing == ["O2 demand max mg O2/L/d (GAIN-CORRECTED)", "kLa required max 1/d"]
+    assert failing == ["O2 demand max mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis)",
+                       "kLa required max 1/d (SENSITIVITY: linear gain, as in the preliminary analysis)"]
 
 
 def test_preliminary_window_diagnostic_explains_upper_references(stage):
     diag = stage["oxygen"][stage["oxygen"]["status"].str.startswith("DIAGNOSTIC")]
     assert len(diag) == 1
-    assert diag["o2_demand_mgO2_L_d_GAIN_CORRECTED"].iloc[0] == pytest.approx(33.0, rel=0.1)
-    assert diag["kla_required_per_d_SCENARIO_T25C"].iloc[0] == pytest.approx(4.0, rel=0.1)
+    assert diag["o2_demand_SENSITIVITY_linear_gain_mgO2_L_d"].iloc[0] == pytest.approx(33.0, rel=0.1)
+    assert diag["kla_required_SENSITIVITY_linear_gain_per_d_SCENARIO_T25C"].iloc[0] == pytest.approx(4.0, rel=0.1)
 
 
 def test_stage_missing_markers(stage):
@@ -176,9 +177,9 @@ def test_oxygen_not_computed_for_non_positive_rates(stage, segmented):
     nonpos = segmented.table.loc[segmented.table["gain_correction_status"].str.startswith("not computed: non-positive"),
                                  "sub_segment"]
     neg = o[o["sub_segment"].isin(nonpos)]
-    assert len(neg) >= 1 and neg["o2_demand_mgO2_L_d_GAIN_CORRECTED"].isna().all()
+    assert len(neg) >= 1 and neg["o2_demand_SENSITIVITY_linear_gain_mgO2_L_d"].isna().all()
     assert neg["status"].str.startswith("not computed: non-positive").all()
-    assert neg["consumption_gain_corrected_mgN_L_d"].isna().all()
+    assert neg["consumption_SENSITIVITY_linear_gain_mgN_L_d"].isna().all()
 
 
 def test_run_and_missing_inputs(cfg, ingested, validated, segmented, tmp_path):

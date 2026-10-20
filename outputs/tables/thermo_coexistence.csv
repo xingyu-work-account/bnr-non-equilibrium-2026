@@ -6,4 +6,4 @@ SCENARIO,40.0,100.0,0.3,7.0,25.0,0.007608958837772396,322.3417232633388,False,
 SCENARIO,40.0,100.0,1.0,7.0,25.0,0.02536319612590799,328.31091695669653,False,
 SCENARIO,40.0,100.0,3.0,7.0,25.0,0.07608958837772396,333.7577422681989,False,
 SCENARIO,40.0,100.0,8.0,7.0,25.0,0.20290556900726392,338.62060941129545,False,
-IN SITU,,,,,,,not computed: DO_mg_L missing,False,"inputs: observed NH4-N and pH medians of 10 slope windows; needs DO_mg_L, NO3_N_mg_L"
+IN SITU,,,,,,,not computed: DO_mg_L missing,False,"inputs: observed NH4-N and pH medians of 9 slope windows; needs DO_mg_L, NO3_N_mg_L"

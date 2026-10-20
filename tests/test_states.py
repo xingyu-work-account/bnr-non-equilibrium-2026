@@ -55,7 +55,10 @@ def test_all_artifact_interval_yields_no_state():
     bins = ST.classify(f)
     assert (bins["state"] == ST.ARTIFACT).all() and not bins["state"].isin(ST.STATES).any()
     fr = ST.state_fractions(bins, 0.0, 10.0)
-    assert fr["status"].startswith("not computed") and np.isnan(fr["idle_fraction_of_stirred_time"])
+    # pass 3 (X2): the idle fraction over classified time is not computed; the bounds are still reported and are the
+    # uninformative [0, 1] of an interval without any process state
+    assert fr["status"].startswith("not computed") and np.isnan(fr["idle_fraction_of_classified_time"])
+    assert (fr["idle_fraction_lower_bound"], fr["idle_fraction_upper_bound"], fr["classified_fraction"]) == (0.0, 1.0, 0.0)
     assert fr["fraction_sensor_artifact"] == 1.0
 
 
@@ -142,8 +145,102 @@ def test_states_on_the_real_record(cfg, run_all_dir):
     comp = pd.read_csv(run_all_dir / "tables" / "states_comparison.csv")
     assert comp["role"].str.startswith(("ASSOCIATION TEST (NH4-free", "DESCRIPTIVE (circular")).all()
     assert (comp["block_bins"] >= 2 * ST.SLOPE_HALF_BINS + 1).all()
-    # the idle fraction in the pulse table is the W3 one
+    # the idle fraction in the pulse table is the W3 one (pass 3: as bounds with the coverage beside them)
     pm = pd.read_csv(run_all_dir / "tables" / "pulses.csv")
-    idle = pm[pm["metric"] == "idle_fraction_of_stirred_time"].set_index("pulse")["value"]
+    idle = pm[pm["metric"] == "idle_fraction_LOWER_BOUND"].set_index("pulse")["value"]
     for k in (1, 2, 3, 4):
-        assert idle[k] == pytest.approx(fr.loc[f"pulse {k}", "idle_fraction_of_stirred_time"])
+        assert idle[k] == pytest.approx(fr.loc[f"pulse {k}", "idle_fraction_lower_bound"])
+
+
+# --- pass 3, X2: autocorrelation-aware slope intervals and the bounded idle fraction ----------------------------------
+def _window_coverage(phi, n_windows, seed, rho=None):
+    """Coverage of the true slope by the production interval at the centre of 101-point windows with AR(1) errors."""
+    rng = np.random.default_rng(seed)
+    n, slope = 2 * ST.SLOPE_HALF_BINS + 1, -2.0
+    t = 0.01 * np.arange(n)
+    scaled = unscaled = known = 0
+    for _ in range(n_windows):
+        y = slope * t + 0.05 * _ar1(n + 300, phi, int(rng.integers(1 << 31)))[300:]
+        out = ST.rolling_theil_sen(t, y, np.ones(n, dtype=bool))
+        c = ST.SLOPE_HALF_BINS
+        scaled += out[1, c] <= slope <= out[2, c]
+        r = ST.theilslopes(y, t, alpha=ST.CI_ALPHA)
+        unscaled += r.low_slope <= slope <= r.high_slope
+        k = ST.interval_scale(n, phi)
+        known += r.slope - k * (r.slope - r.low_slope) <= slope <= r.slope + k * (r.high_slope - r.slope)
+    return scaled / n_windows, unscaled / n_windows, known / n_windows
+
+
+def test_autocorrelation_scaled_interval_covers_an_ar1_slope():
+    scaled, unscaled, known = _window_coverage(0.9, 400, 20261020)
+    # the √(n/n_eff) formula holds its 95 % with the true ρ; with ρ estimated from 101 detrended points (biased low,
+    # mean ≈ 0.84 for φ = 0.9) the coverage is ≈ 0.85; the independent-point interval covers ≈ 0.35 (docs/progress.md)
+    assert 0.92 <= known <= 0.98
+    assert scaled >= 0.80 and unscaled <= 0.50 and scaled - unscaled >= 0.35
+
+
+def test_rho_cap_keeps_n_eff_positive():
+    n = 2 * ST.SLOPE_HALF_BINS + 1
+    k_cap = ST.interval_scale(n, 1.0)  # ρ = 1 would give n_eff = 0
+    assert np.isfinite(k_cap) and k_cap == pytest.approx(ST.interval_scale(n, ST.RHO_MAX))
+    assert k_cap == pytest.approx(np.sqrt((1 + ST.RHO_MAX) / (1 - ST.RHO_MAX)))
+    assert ST.interval_scale(n, -0.3) == 1.0 and ST.lag1_rho(np.ones(n)) == 0.0  # no variance: no widening
+    assert ST.lag1_rho(np.arange(n, dtype=float)) == ST.RHO_MAX  # lag-1 autocorrelation 1, capped
+    t = 0.01 * np.arange(n)
+    out = ST.rolling_theil_sen(t, 2.0 * t + np.repeat([0.0, 1.0], [n // 2, n - n // 2]), np.ones(n, dtype=bool))
+    assert np.isfinite(out[:, ST.SLOPE_HALF_BINS]).all() and out[3, ST.SLOPE_HALF_BINS] <= ST.RHO_MAX
+
+
+def _state_bins(states):
+    return pd.DataFrame({"t_mid_d": 1.005 + 0.01 * np.arange(len(states)), "state": states})
+
+
+def test_idle_bounds_equal_hand_counts():
+    st = (["inactive_oversupplied"] * 3 + ["active_nitrification"] * 4 + ["oxygen_limited"] * 1 + [ST.UNCLASSIFIED] * 1
+          + [ST.ARTIFACT] * 1)  # 10 bins, 8 classified
+    fr = ST.state_fractions(_state_bins(st), 0.0, 10.0)
+    assert fr["n_bins"] == 10 and fr["n_classified"] == 8 and fr["n_inactive_oversupplied"] == 3
+    assert fr["idle_fraction_lower_bound"] == pytest.approx(3 / 10)
+    assert fr["idle_fraction_upper_bound"] == pytest.approx((3 + 1 + 1) / 10)
+    assert fr["classified_fraction"] == pytest.approx(0.8)
+    assert fr["idle_fraction_of_classified_time"] == pytest.approx(3 / 8)
+    assert fr["status"].startswith("computed (CONDITIONAL")
+
+
+def test_conditional_idle_fraction_needs_the_coverage_but_the_bounds_do_not():
+    st = ["inactive_oversupplied"] * 2 + ["active_nitrification"] * 2 + [ST.UNCLASSIFIED] * 6  # coverage 0.4 < 0.5
+    fr = ST.state_fractions(_state_bins(st), 0.0, 10.0)
+    assert ST.MIN_CLASSIFIED_FRACTION == 0.5
+    assert np.isnan(fr["idle_fraction_of_classified_time"])
+    assert fr["status"] == ("not computed: classified fraction 0.400 below 0.5 (the classified bins are not "
+                            "representative of the interval; see the bounds)")
+    assert (fr["idle_fraction_lower_bound"], fr["idle_fraction_upper_bound"]) == pytest.approx((0.2, 0.8))
+    assert fr["bounds_status"] == "computed"
+    at_threshold = ST.state_fractions(_state_bins(st[:5] + st[5:6] * 5), 0.0, 10.0)  # 4 classified of 10 again
+    assert np.isnan(at_threshold["idle_fraction_of_classified_time"])
+    half = ST.state_fractions(_state_bins(["inactive_oversupplied"] * 5 + [ST.ARTIFACT] * 5), 0.0, 10.0)
+    assert half["classified_fraction"] == 0.5 and half["idle_fraction_of_classified_time"] == 1.0  # ≥ 0.5 computes
+
+
+def test_real_idle_metrics_carry_bounds_and_coverage(run_all_dir):
+    pm = pd.read_csv(run_all_dir / "tables" / "pulses.csv")
+    fr = pd.read_csv(run_all_dir / "tables" / "states_fractions.csv").set_index("interval")
+    idle = pm[pm["metric"].str.startswith("idle_fraction")]
+    assert set(idle["metric"]) == {"idle_fraction_LOWER_BOUND", "idle_fraction_UPPER_BOUND",
+                                   "idle_fraction_of_classified_time_CONDITIONAL"}
+    assert idle["basis"].str.contains("coverage: classified fraction").all()  # no idle fraction without its coverage
+    m = pm.set_index(["pulse", "metric"])
+    for k in (1, 2, 3, 4):
+        cov = fr.loc[f"pulse {k}", "classified_fraction"]
+        assert m.loc[(k, "classified_fraction"), "value"] == pytest.approx(cov)
+        lo, hi = m.loc[(k, "idle_fraction_LOWER_BOUND"), "value"], m.loc[(k, "idle_fraction_UPPER_BOUND"), "value"]
+        assert 0 <= lo <= hi <= 1
+        cond = m.loc[(k, "idle_fraction_of_classified_time_CONDITIONAL")]
+        if cov < ST.MIN_CLASSIFIED_FRACTION:  # below the coverage, or (coverage 0) no process state at all
+            assert cond["status"].startswith(("not computed: classified fraction",
+                                              "not computed: no bin with a process state")) and np.isnan(cond["value"])
+        else:
+            assert cond["status"] == "computed"
+    bins = pd.read_parquet(run_all_dir / "processed" / "states_bins.parquet")
+    have = bins["nh4_slope_mgN_L_d"].notna()
+    assert (bins.loc[have, "nh4_slope_resid_lag1"].between(0, ST.RHO_MAX)).all()

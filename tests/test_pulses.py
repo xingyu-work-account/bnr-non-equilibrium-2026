@@ -36,7 +36,7 @@ def test_stirrer_energy():
 
 def _state(rate=1.0):
     t = np.round(np.arange(1.005, 47.92, 0.01), 10)
-    return pd.DataFrame({"t_d": t, "model_rate_mgN_L_d": rate})
+    return pd.DataFrame({"t_d": t, "model_rate_mgN_L_d": rate, "model_state_C_mgN_L_conditional_on_C0": 100.0})
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +62,7 @@ def test_every_metric_computed_with_inputs_or_not_computed(cfg, real_inputs):
 def test_required_metrics_present(cfg, real_inputs):
     m = P.pulse_metrics(cfg, real_inputs)
     for metric in ("delta_A_kJ_mol_SCENARIO_T25C", "consumption_uncorrected_weighted_mgN_L_d",
-                   "consumption_gain_corrected_weighted_mgN_L_d", "median_pH", "fa_median_mgNH3_L_SCENARIO_T20C",
+                   "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d", "median_pH", "fa_median_mgNH3_L_SCENARIO_T20C",
                    "fa_median_mgNH3_L_SCENARIO_T25C", "o2_demand_mgO2_L_d", "kla_required_per_d_SCENARIO_T25C",
                    "eta_conversion_fraction_MODEL_BASED", "specific_stirring_energy_J_per_gN",
                    "free_energy_to_stirrer_energy_ratio"):
@@ -72,12 +72,12 @@ def test_required_metrics_present(cfg, real_inputs):
 def test_labels_and_missing_markers(cfg, real_inputs):
     m = P.pulse_metrics(cfg, real_inputs).set_index(["pulse", "metric"])
     assert "MODEL-BASED" in m.loc[(2, "eta_conversion_fraction_MODEL_BASED"), "basis"]
-    assert "GAIN-CORRECTED" in m.loc[(2, "consumption_gain_corrected_weighted_mgN_L_d"), "basis"]
+    assert "GAIN-CORRECTED" in m.loc[(2, "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"), "basis"]
     assert "SCENARIO" in m.loc[(2, "fa_median_mgNH3_L_SCENARIO_T25C"), "basis"]
     assert m.loc[(3, "specific_stirring_energy_J_per_gN"), "status"] == "not computed: stirrer_power_W missing"
     assert m.loc[(3, "kla_measured_over_required"), "status"] == "not computed: kLa_per_d missing"
     # pulse 4's last slope window (44.76-47.92 d) has a rising electrode signal: excluded from the weighted rates
-    assert "excludes sub-segment(s)" in m.loc[(4, "consumption_gain_corrected_weighted_mgN_L_d"), "basis"]
+    assert "excludes sub-segment(s)" in m.loc[(4, "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"), "basis"]
 
 
 def test_eta_from_model_state(cfg, real_inputs):
@@ -119,17 +119,17 @@ def test_negative_consumption_excluded_and_not_computed(cfg, real_inputs):
     w = P.governed_windows(seg, 4)
     pos = w[w["gain_correction_status"] == "computed"]
     assert len(pos) < len(w) and (w.loc[~w.index.isin(pos.index), "gain_correction_status"] == S.NON_POSITIVE).all()
-    expected = float((pos["consumption_gain_corrected_mgN_L_d"] * pos["duration_d"]).sum() / pos["duration_d"].sum())
-    assert m.loc[(4, "consumption_gain_corrected_weighted_mgN_L_d"), "value"] == pytest.approx(expected)
+    expected = float((pos["consumption_SENSITIVITY_linear_gain_mgN_L_d"] * pos["duration_d"]).sum() / pos["duration_d"].sum())
+    assert m.loc[(4, "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"), "value"] == pytest.approx(expected)
     # every window of pulse 3 made non-positive: weighted rates and O2 are not computed
     bad = seg.copy()
     k3 = (bad["governing_pulse"] == 3) & (bad["status"] == "computed")
     bad.loc[k3, ["slope_mgN_L_d", "slope_mgNH4_L_d"]] = 0.5
-    bad.loc[k3, "consumption_gain_corrected_mgN_L_d"] = np.nan
+    bad.loc[k3, "consumption_SENSITIVITY_linear_gain_mgN_L_d"] = np.nan
     bad.loc[k3, "gain_correction_status"] = S.NON_POSITIVE
     m3 = P.pulse_metrics(cfg, {**real_inputs, "segments": bad}).set_index(["pulse", "metric"])
-    for metric in ("consumption_gain_corrected_weighted_mgN_L_d", "consumption_uncorrected_weighted_mgN_L_d",
-                   "consumption_gain_corrected_first_window_mgN_L_d", "o2_demand_SENSITIVITY_linear_gain_mgO2_L_d"):
+    for metric in ("consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d", "consumption_uncorrected_weighted_mgN_L_d",
+                   "consumption_SENSITIVITY_linear_gain_first_window_mgN_L_d", "o2_demand_SENSITIVITY_linear_gain_mgO2_L_d"):
         assert m3.loc[(3, metric), "status"].startswith("not computed: non-positive"), metric
         assert np.isnan(m3.loc[(3, metric), "value"])
 
@@ -138,10 +138,10 @@ def test_rates_carry_segment_intervals_and_held_fraction(cfg, real_inputs):
     seg = real_inputs["segments"].set_index("sub_segment")
     m = P.pulse_metrics(cfg, real_inputs).set_index(["pulse", "metric"])
     first = P.governed_windows(real_inputs["segments"], 2).iloc[0]
-    r = m.loc[(2, "consumption_gain_corrected_first_window_mgN_L_d")]
+    r = m.loc[(2, "consumption_SENSITIVITY_linear_gain_first_window_mgN_L_d")]
     s = seg.loc[first["sub_segment"]]
-    assert (r["ci95_low"], r["ci95_high"]) == (s["consumption_gain_corrected_ci95_low_mgN_L_d"],
-                                               s["consumption_gain_corrected_ci95_high_mgN_L_d"])
+    assert (r["ci95_low"], r["ci95_high"]) == (s["consumption_SENSITIVITY_linear_gain_ci95_low_mgN_L_d"],
+                                               s["consumption_SENSITIVITY_linear_gain_ci95_high_mgN_L_d"])
     assert r["held_fraction"] == pytest.approx(s["held_fraction"]) and r["held_fraction"] > 0.5
     u = m.loc[(2, "consumption_uncorrected_first_window_mgN_L_d")]
     assert u["ci95_low"] == pytest.approx(-s["slope_ci95_high_mgN_L_d"]) and u["ci95_high"] == pytest.approx(-s["slope_ci95_low_mgN_L_d"])

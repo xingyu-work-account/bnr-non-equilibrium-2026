@@ -1,110 +1,114 @@
-state,t_start_d,t_end_d,duration_d,n_bins,median_C_inv_mgN_L,median_consumption_mgN_L_d,median_pH,median_orp_rel_mV,reason
-sensor_artifact,0.9999999999999999,1.9,0.9,90,178.26603659310024,,6.980000000000004,,NH4 held/damped output
-unclassified,1.9,2.62,0.72,72,174.71470718168544,,6.910000000000002,,slope window crosses an artifact or event
-sensor_artifact,2.62,2.73,0.11,11,178.3745424938022,,7.0436781610108605,,NH4 step region
-unclassified,2.7300000000000004,3.19,0.46,46,175.44385298483684,,7.450028733685672,,slope window crosses an artifact or event
-sensor_artifact,3.1900000000000004,3.3099999999999996,0.12,12,149.87490338875904,,7.328054664748819,,NH4 step region
-unclassified,3.31,3.6799999999999997,0.37,37,130.9821946001236,,7.210000000000003,,slope window crosses an artifact or event
-sensor_artifact,3.68,3.8099999999999996,0.13,13,142.99774680911636,,7.170000000000007,,NH4 step region
-unclassified,3.81,3.9,0.09,9,147.84724336730065,,7.150000000000009,,slope window crosses an artifact or event
-sensor_artifact,3.9000000000000004,4.18,0.28,28,135.0607085984758,,7.161860465209736,,NH4 step region
-unclassified,4.180000000000001,4.81,0.63,63,135.717372598349,,7.190000000000009,,slope window crosses an artifact or event
-sensor_artifact,4.81,4.95,0.14,14,123.01714279875578,,7.147471265298144,,NH4 step region
-unclassified,4.95,4.99,0.04,4,134.50401547620385,,7.137701149864773,,slope window crosses an artifact or event
-sensor_artifact,4.99,5.19,0.2,20,127.96392381931537,,7.124069767605399,,NH4 step region
-unclassified,5.19,5.56,0.37,37,129.39661748691952,,7.254137929151018,,slope window crosses an artifact or event
-sensor_artifact,5.56,5.67,0.11,11,128.9087156126171,,7.248139532594048,,NH4 step region
-unclassified,5.67,5.86,0.19,19,128.63916343058412,,7.2906976740214136,,slope window crosses an artifact or event
-sensor_artifact,5.86,6.01,0.15,15,116.87689442216538,,7.3116279057150795,,NH4 step region
-unclassified,6.01,6.53,0.52,52,123.04587630850943,,7.178692194841394,,slope window crosses an artifact or event
-sensor_artifact,6.53,6.6499999999999995,0.12,12,101.93722138241358,,6.98453488365084,,NH4 step region
-unclassified,6.65,7.64,0.99,99,100.41103391079444,-11.55012468812023,6.859999999999992,1.6639534883719875,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-active_nitrification,7.64,7.88,0.24,24,105.99777545616266,7.7297202436677335,6.812082331008792,2.607350975675047,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,7.88,8.53,0.65,65,101.57663303131518,8.718236429512913,6.996860464205082,2.607350975675047,consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event
-sensor_artifact,8.53,8.65,0.12,12,62.69657917603341,,6.98028869300593,,NH4 step region; pulse transient
-unclassified,8.65,8.74,0.09,9,55.35510638873446,,6.982558139418062,,slope window crosses an artifact or event
-sensor_artifact,8.74,8.96,0.22,22,81.65532583818508,,7.011096632366021,,NH4 step region
-unclassified,8.959999999999999,9.26,0.3,30,152.4064892776175,,7.028662790218711,,slope window crosses an artifact or event
-sensor_artifact,9.26,9.390000000000002,0.13,13,159.61218784253091,,7.01848837161406,,NH4 step region
-unclassified,9.389999999999999,9.99,0.6,60,158.9762332809495,1.5379963462329889,7.0032952421641586,8.145402298850797,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-active_nitrification,9.99,10.070000000000002,0.08,8,161.0112547874587,4.626033446126984,7.010634859570167,8.145402298850797,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,10.069999999999999,10.570000000000002,0.5,50,155.3364262373033,,6.990872081866959,,slope window crosses an artifact or event
-sensor_artifact,10.569999999999999,10.680000000000001,0.11,11,172.03670862432404,,7.000689651063018,,NH4 step region; pulse transient
-unclassified,10.679999999999998,10.87,0.19,19,173.39948961916292,,7.002441853339105,,slope window crosses an artifact or event
-sensor_artifact,10.87,10.980000000000002,0.11,11,208.04864883380387,,7.002528730495442,,NH4 step region
-unclassified,10.979999999999999,11.480000000000002,0.5,50,205.6014717603567,,6.959595025702265,,slope window crosses an artifact or event
-active_nitrification,11.479999999999999,11.58,0.1,10,205.67125635207418,0.92608452526571,6.94215116775555,-15.788702886928654,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,11.58,13.000000000000002,1.42,142,204.401385366728,1.3457419404318733,6.978488371158465,-7.021651964715261,consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event
-sensor_artifact,12.999999999999998,17.999999999999996,5.0,500,189.69760768760585,,7.235031408390496,,NH4 held/damped output; NH4 step region
-unclassified,18.000000000000004,18.499999999999996,0.5,50,174.0470097184596,,7.57029068681017,,slope window crosses an artifact or event
-inactive_oversupplied,18.500000000000004,18.52,0.02,2,172.45812274113246,0.5282965083634583,7.511212932946519,-0.5052793370757485,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,18.52,18.91,0.39,39,174.34085700468515,-0.8462038165195376,7.570689641131968,-0.4773723603315716,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-inactive_oversupplied,18.91,19.029999999999998,0.12,12,174.31863110536605,0.014335066824410667,7.644836268979714,-0.4773723603315716,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,19.03,19.26,0.23,23,174.32562317352935,0.4380122990322338,7.685402306384463,-0.3430900828657286,consumption with a rising pH (conflicting indicators)
-active_nitrification,19.26,19.76,0.5,50,173.93138578188507,1.9497691417920195,7.691104622541907,-0.02100374231494584,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,19.76,20.7,0.9400000000000001,94,172.4980388575339,4.349476097833348,7.811337206265009,3.2935912857523135,consumption with a rising pH (conflicting indicators); slope window crosses an artifact or event
-sensor_artifact,20.7,21.7,1.0,100,164.96198224270762,,7.835670284006836,,NH4 held/damped output
-unclassified,21.7,21.8,0.1,10,186.10604505342934,,7.912241383590969,,slope window crosses an artifact or event
-sensor_artifact,21.8,24.76,2.96,296,168.27010107338907,,7.837398424719655,,NH4 held/damped output; NH4 step region; pulse transient
-unclassified,24.76,25.389999999999997,0.63,63,242.61160468177673,-1.0649891127719036,7.600114941729685,-0.07736300454428147,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-inactive_oversupplied,25.39,25.43,0.04,4,242.934340268812,0.24389473144527796,7.578242457056662,-0.10491245656241688,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,25.430000000000003,25.83,0.4,40,242.9468611153557,2.1641346210163,7.604218794409716,-0.16909248863927928,consumption with a rising pH (conflicting indicators)
-active_nitrification,25.830000000000002,26.15,0.32,32,241.73398109339308,2.5710008997946727,7.610867419917604,-0.2507043571238654,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,26.150000000000002,26.74,0.59,59,242.39648392801217,-1.6508169572040576,7.597011492198164,0.11511627906955368,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-inactive_oversupplied,26.74,26.76,0.02,2,243.30548904062374,0.3453714491248202,7.604627768569408,18.777577519380387,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-active_nitrification,26.76,27.34,0.58,58,242.18252225183073,2.020597143349638,7.596551730473241,55.327665062816514,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,27.34,27.97,0.63,63,241.53292606854907,1.3192140966739008,7.603953494680378,-17.588870622828267,consumption with a rising pH (conflicting indicators)
-active_nitrification,27.970000000000002,28.09,0.12,12,240.50963959938855,0.6653276434476321,7.630289359221874,-17.740344827586185,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,28.09,28.84,0.75,75,240.81853213857082,0.06320324724257909,7.601494243969864,-17.529597701149385,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-sensor_artifact,28.84,28.99,0.15,15,239.1462229264428,,7.554137926240186,,ORP electrode event
-unclassified,28.99,30.43,1.44,144,238.35502082538335,-3.0729944619434586,7.519999999999996,-1.1278134188721936,C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event
-sensor_artifact,30.430000000000003,30.58,0.15,15,236.0263763345176,,7.510804572245754,,ORP electrode event
-unclassified,30.580000000000002,32.39000000000001,1.81,181,238.14398896563804,-5.504310126213516,7.430000000000001,-1.6660919540230168,C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event
-sensor_artifact,32.38999999999999,32.50000000000001,0.11,11,291.70307075859387,,7.415348849825832,,NH4 step region; pulse transient
-unclassified,32.49999999999999,33.00000000000001,0.5,50,292.1730073730968,,7.246279067080586,,slope window crosses an artifact or event
-active_nitrification,32.99999999999999,33.27,0.27,27,291.4694850934947,1.2356335941201668,7.229080456231477,0.1542067628976156,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,33.27,33.39000000000001,0.12,12,291.25922314997695,0.5865096333604554,7.200608787859013,0.04000133654103877,consumption with a rising pH (conflicting indicators)
-active_nitrification,33.38999999999999,33.52,0.13,13,291.2993587785081,0.16327576102624536,7.228023259669017,0.024072440523838168,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,33.52,33.7,0.18,18,291.3398680259678,0.10175855163089366,7.241104649527324,-0.01738104784811867,consumption with a rising pH (conflicting indicators)
-inactive_oversupplied,33.699999999999996,33.940000000000005,0.24,24,291.34227761606144,0.004542635983084816,7.216460841287963,-0.19744252873555013,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,33.94,34.15,0.21,21,291.20903858642066,-0.10744250014393963,7.254597689049552,-0.413144212777496,C(t) rising without an N source (drift or evaporation)
-inactive_oversupplied,34.15,34.27,0.12,12,291.2881335590845,-0.011203029563488268,7.2616666706618975,-0.4625892141138763,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,34.27,34.720000000000006,0.45,45,291.39662829419234,1.1442150791974321,7.2760465354591926,-0.413144212777496,consumption with a rising pH (conflicting indicators)
-active_nitrification,34.71999999999999,34.77,0.05,5,290.5878711772651,1.6655408905630427,7.230348835106551,0.29839882384391103,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,34.77,34.78000000000001,0.01,1,290.526680345775,1.6638858019946376,7.25816091063654,0.29839882384391103,consumption with a rising pH (conflicting indicators)
-active_nitrification,34.779999999999994,34.84,0.06,6,290.42149058781456,1.6237916388246747,7.291448805744944,0.29839882384391103,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,34.839999999999996,34.86000000000001,0.02,2,290.36807822293997,1.515767279695019,7.298603981207726,0.29839882384391103,consumption with a rising pH (conflicting indicators)
-active_nitrification,34.85999999999999,34.89000000000001,0.03,3,290.339005615558,1.4057923908753662,7.30655172482283,0.29839882384391103,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,34.88999999999999,35.11000000000001,0.22,22,290.179894997258,0.7865218828435807,7.3198837216311645,0.30047948409517744,consumption with a rising pH (conflicting indicators)
-inactive_oversupplied,35.10999999999999,35.190000000000005,0.08,8,290.1985949616288,0.022716812920632046,7.2595930175316346,0.359827586207075,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,35.19,37.21,2.02,202,291.6407608280807,-2.288541717554608,7.334360471891835,-0.2584085137664829,C(t) rising without an N source (drift or evaporation); slope window crosses an artifact or event
-sensor_artifact,37.21,37.32,0.11,11,299.65192066032125,,7.370000000000009,,NH4 step region
-unclassified,37.32,38.06,0.74,74,300.300080774417,-0.37077004826839405,7.362965128545169,1.1813960171077866,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-active_nitrification,38.059999999999995,38.29,0.23,23,300.6207902527099,0.8225265904941672,7.2975581442076765,1.2423336006415298,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,38.29,38.37,0.08,8,298.8019395858556,0.2851971497127568,7.3191539731849975,1.2423336006415298,"no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-inactive_oversupplied,38.37,38.4,0.03,3,301.19733098909944,-0.3365348189440489,7.339999999999989,1.2195348837210247,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,38.4,38.43,0.03,3,300.87719635509086,-0.4462584006249931,7.3293103489369855,1.1754651162790992,C(t) rising without an N source (drift or evaporation)
-inactive_oversupplied,38.43,38.96,0.53,53,300.35762462754116,0.05459043146336451,7.356046509291526,0.7081682705158698,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,38.96,39.04,0.08,8,299.63155943411726,-0.7532252030436892,7.429186047738244,0.4639043704893453,C(t) rising without an N source (drift or evaporation)
-inactive_oversupplied,39.04,39.07,0.03,3,300.1106614338998,-0.30958708491729836,7.441034466663492,0.45343023255830417,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,39.07,40.42,1.35,135,301.35979240367465,-2.7188977864208557,7.379195407093135,-0.6773563218390279,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-inactive_oversupplied,40.419999999999995,40.550000000000004,0.13,13,303.7599188568153,-0.32768219855253145,7.391162792566785,-0.6424418604649134,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,40.55,40.6,0.05,5,304.2799431092885,0.8647371040986289,7.406551724822836,-0.5137784014968076,"no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-active_nitrification,40.6,41.25000000000001,0.65,65,301.6658338452769,14.269199541863513,7.3695348764780935,0.0484883720931748,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,41.24999999999999,41.74,0.49,49,290.7081591254271,6.729589367389236,7.37632184478795,0.3070850040095934,consumption with a rising pH (conflicting indicators)
-active_nitrification,41.74,41.89000000000001,0.15,15,287.9138260376978,3.7616731540652553,7.380232556504056,0.17882919005626263,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,41.88999999999999,42.39000000000001,0.5,50,289.50977555594216,-1.5076905287382463,7.376627902187122,0.10779069767437477,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-active_nitrification,42.38999999999999,42.440000000000005,0.05,5,292.3334875246319,1.8756149703792708,7.393908032621471,0.10107056936635672,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,42.44,44.1,1.6600000000000001,166,295.552604457294,-4.232131949271775,7.372256744637802,0.16717856188168412,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-inactive_oversupplied,44.1,44.15,0.05,5,302.58679540321515,0.27231687084564693,7.324534881968632,0.37168738305283,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV"
-unclassified,44.15,44.65,0.5,50,298.4271845083211,,7.361798318693891,,slope window crosses an artifact or event
-sensor_artifact,44.65,44.76,0.11,11,292.05396159866973,,7.400000000000001,,NH4 step region
-unclassified,44.76,45.42,0.66,66,291.230532579435,-0.3621438644715113,7.393468997953207,-2.741455493183608,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event"
-active_nitrification,45.419999999999995,45.56,0.14,14,291.8691551570035,0.8723126735797345,7.391716119081698,-2.419599037690375,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,45.559999999999995,45.61000000000001,0.05,5,291.0514710019272,0.7805872017118862,7.386206899291318,-2.092870890136254,"no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-active_nitrification,45.60999999999999,45.74,0.13,13,290.9645354084845,0.7891151571612739,7.398735629786758,-1.4801162790698186,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,45.74,45.78000000000001,0.04,4,291.6601242317315,0.5612457363293086,7.3927325466911675,-1.26533146217578,"no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-active_nitrification,45.779999999999994,45.88,0.1,10,291.28207516632887,0.8014102167046577,7.3434302335511035,-0.883448275862122,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,45.88,47.23,1.35,135,293.38286994477573,-3.636971446980093,7.369883721747979,0.04267441860466192,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH"
-active_nitrification,47.23,47.42,0.19,19,297.1903561829185,1.6605275540936142,7.34379310070867,0.6800547981823684,NH4 slope 95 % interval < 0 and pH not rising
-unclassified,47.419999999999995,47.92,0.5,50,294.66322907069025,,7.3355232576830804,,slope window crosses an artifact or event
+state,t_start_d,t_end_d,duration_d,n_bins,median_C_inv_mgN_L,median_consumption_mgN_L_d,median_pH,median_orp_rel_mV,reason,nh4_observation_model,nh4_series
+sensor_artifact,0.9999999999999999,1.9,0.9,90,178.3094794504139,,6.980000000000004,,NH4 held/damped output,M6_log,C_inv:c29e26a0fb89
+unclassified,1.9,2.62,0.72,72,174.75840465898617,,6.910000000000002,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,2.62,2.73,0.11,11,178.41531434772008,,7.0436781610108605,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,2.7300000000000004,3.19,0.46,46,175.48473183248223,,7.450028733685672,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,3.1900000000000004,3.3099999999999996,0.12,12,149.91543199355627,,7.328054664748819,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,3.31,3.6799999999999997,0.37,37,131.0217679392764,,7.210000000000003,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,3.68,3.8099999999999996,0.13,13,143.03806421456156,,7.170000000000007,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,3.81,3.9,0.09,9,147.8877851089873,,7.150000000000009,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,3.9000000000000004,4.18,0.28,28,135.10069848636897,,7.161860465209736,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,4.180000000000001,4.81,0.63,63,135.75751521643505,,7.190000000000009,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,4.81,4.95,0.14,14,123.0564943383294,,7.147471265298144,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,4.95,4.99,0.04,4,134.54420983394732,,7.137701149864773,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,4.99,5.19,0.2,20,128.00371808549278,,7.124069767605399,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,5.19,5.56,0.37,37,129.4365590811764,,7.254137929151018,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,5.56,5.67,0.11,11,128.94897464809827,,7.248139532594048,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,5.67,5.86,0.19,19,128.67942958016584,,7.2906976740214136,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,5.86,6.01,0.15,15,116.9161897402783,,7.3116279057150795,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,6.01,6.53,0.52,52,123.08580826153167,,7.178692194841394,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,6.53,6.6499999999999995,0.12,12,101.97637436619584,,6.98453488365084,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,6.65,7.81,1.16,116,101.5090633019502,-5.865475144602499,6.859883721163865,1.7011694734025866,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+active_nitrification,7.81,7.9799999999999995,0.17,17,103.84021606880432,9.126999954282898,6.809999999999991,2.607350975675047,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,7.98,8.53,0.55,55,101.2768061806495,6.712164652166034,7.0,3.5511093290566293,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,8.53,8.65,0.12,12,62.725951626251444,,6.98028869300593,,NH4 step region; pulse transient,M6_log,C_inv:c29e26a0fb89
+unclassified,8.65,8.74,0.09,9,55.38268382382548,,6.982558139418062,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,8.74,8.96,0.22,22,81.68841309278704,,7.011096632366021,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,8.959999999999999,9.26,0.3,30,152.44599071655563,,7.028662790218711,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,9.26,9.390000000000002,0.13,13,159.65189277392943,,7.01848837161406,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,9.389999999999999,10.570000000000002,1.18,118,158.92513417337466,2.9625508369633264,6.999595698035272,8.145402298850797,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,10.569999999999999,10.680000000000001,0.11,11,172.07690286640224,,7.000689651063018,,NH4 step region; pulse transient,M6_log,C_inv:c29e26a0fb89
+unclassified,10.679999999999998,10.87,0.19,19,173.43971706604577,,7.002441853339105,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,10.87,10.980000000000002,0.11,11,208.0880410281172,,7.002528730495442,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,10.979999999999999,11.480000000000002,0.5,50,205.64117362508586,,6.959595025702265,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+oxygen_limited,11.479999999999999,11.570000000000002,0.09,9,205.718156622148,0.9408869949650815,6.94267441988968,-15.99767441860466,"NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising",M6_log,C_inv:c29e26a0fb89
+unclassified,11.569999999999999,11.72,0.15,15,205.55986019591228,0.8925954634500206,6.939885058156174,-12.230179096498233,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,11.72,11.74,0.02,2,205.31735388190725,1.2375408632300202,6.940346830143806,-10.60694065757815,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,11.74,11.750000000000002,0.01,1,205.16136148010804,1.3141461146214857,6.94058139184425,-10.546279069767436,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,11.749999999999998,11.78,0.03,3,205.10131239380917,1.374896994966776,6.942873556026956,-10.292906976744163,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,11.78,11.840000000000002,0.06,6,205.05615251590737,1.4670576647940097,6.946104651338027,-9.234188719593725,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,11.839999999999998,11.92,0.08,8,205.05501090536865,1.5271153990248743,6.950523262472689,-8.316279069767411,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,11.92,12.26,0.34,34,204.85272000651204,1.475171412688853,6.970056139362427,-7.021651964715261,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,12.26,12.500000000000002,0.24,24,204.40462054868595,1.29131401871496,7.002500018808005,-5.455539962576779,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,12.499999999999998,13.000000000000002,0.5,50,203.98098544639322,,6.990285364319763,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,12.999999999999998,17.999999999999996,5.0,500,189.73914756337788,,7.235031408390496,,NH4 held/damped output; NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,18.000000000000004,18.819999999999997,0.8200000000000001,82,174.08984486421525,-0.7252500785728372,7.5710425051479096,-0.4773723603315716,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,18.82,19.139999999999997,0.32,32,174.40449453267888,0.06174206019271356,7.632034841315329,-0.4700013365410314,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,19.14,19.16,0.02,2,174.45644928644793,0.4537068039116251,7.684166666435706,-0.3354584335740185,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,19.16,19.74,0.58,58,174.04906262141134,1.6609988222209449,7.691104622541907,-0.1349304998665417,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,19.74,19.77,0.03,3,173.2881216605178,3.0699168855155268,7.543837256497579,2.194186046511618,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,19.77,19.889999999999997,0.12,12,172.96360460879288,3.9208539632952135,7.578104791019372,2.6691860465116406,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,19.89,19.93,0.04,4,172.6832228362196,4.7514353108988026,7.607586241141512,2.9441125367550143,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,19.930000000000003,20.069999999999997,0.14,14,172.66104631526773,5.020313457194875,7.889765438245812,3.3344961240309914,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,20.07,20.11,0.04,4,172.6129321707437,4.325217488034074,7.895447074864285,3.3917869553596915,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,20.110000000000003,20.169999999999998,0.06,6,171.9275493727725,3.6825672143613177,7.899655174468489,3.428495054798333,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,20.17,20.7,0.53,53,170.1422325900449,3.884655582840554,7.812325615273088,3.428495054798333,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,20.7,21.7,1.0,100,165.00622344833715,,7.835670284006836,,NH4 held/damped output,M6_log,C_inv:c29e26a0fb89
+unclassified,21.7,21.8,0.1,10,186.15097272840376,,7.912241383590969,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,21.8,24.76,2.96,296,168.31517031737457,,7.837398424719655,,NH4 held/damped output; NH4 step region; pulse transient,M6_log,C_inv:c29e26a0fb89
+unclassified,24.76,25.44,0.68,68,242.89130741644237,-0.5489738990651084,7.599195392937899,-0.07736300454428147,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,25.44,25.59,0.15,15,243.09334874784057,1.280915701229684,7.587906979314219,-0.12356321839079953,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,25.59,25.74,0.15,15,242.9854358593842,2.292955636001342,7.615402296453432,-0.16909248863927928,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,25.74,25.77,0.03,3,242.82311396101358,2.3792050246612506,7.62593023699729,-0.2730987703822194,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,25.77,25.8,0.03,3,242.69695104927342,2.501935247784539,7.604367819858908,-0.2730987703822194,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,25.8,25.959999999999997,0.16,16,242.35985078741635,2.658350264964924,7.607645677126804,-0.2507043571238654,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,25.96,26.74,0.78,78,241.69242774100522,-1.0964763303603335,7.598895351582475,0.02266105319412759,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,26.74,26.999999999999996,0.26,26,242.6896483114283,2.075716569760833,7.603181636878473,46.03902967121091,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+active_nitrification,27.000000000000004,27.12,0.12,12,242.1363043958682,2.3300009000085424,7.5993103496218755,88.44586206896362,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,27.12,27.169999999999998,0.05,5,241.62986426241443,1.9164141069988279,7.592441855792306,88.44586206896362,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+active_nitrification,27.17,27.319999999999997,0.15,15,241.409106990675,1.3266583953728626,7.564302319740393,50.72620088211754,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,27.32,27.4,0.08,8,242.09170195597994,1.1977623809382942,7.466646613710504,32.018898690189886,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,27.400000000000002,27.54,0.14,14,241.98796440138682,1.1655250716725123,7.5466860564413185,4.007679096498308,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+oxygen_limited,27.540000000000003,27.58,0.04,4,241.5844382544875,1.1171441511553262,7.579195402070555,-17.35000066827058,"NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising",M6_log,C_inv:c29e26a0fb89
+unclassified,27.580000000000002,27.74,0.16,16,241.93251548554252,1.6143866133145333,7.609131917311117,-17.604705292702633,"consumption with a rising pH (conflicting indicators); no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,27.74,27.77,0.03,3,241.03226181684616,1.779953671374464,7.592988524695988,-17.740344827586185,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,27.77,27.779999999999998,0.01,1,241.40115748352156,1.7665167703810125,7.609885058156168,-17.740344827586185,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,27.78,27.84,0.06,6,241.22545197457427,1.765784822638012,7.623062014082349,-17.740344827586185,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+oxygen_limited,27.84,28.34,0.5,50,240.70668270508747,0.4585903901375382,7.626756220470414,-17.705547981823003,"NH4 slope interval spans 0, ORP_rel ≤ −15 mV, ORP not rising, pH not rising",M6_log,C_inv:c29e26a0fb89
+unclassified,28.34,28.84,0.5,50,240.86978314564004,,7.595494524733404,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,28.84,28.99,0.15,15,239.1935364906939,,7.554137926240186,,ORP electrode event,M6_log,C_inv:c29e26a0fb89
+unclassified,28.99,30.43,1.44,144,238.40255801708076,-3.0733994255066506,7.519999999999996,-1.1278134188721936,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,30.430000000000003,30.58,0.15,15,236.07458639816886,,7.510804572245754,,ORP electrode event,M6_log,C_inv:c29e26a0fb89
+unclassified,30.580000000000002,32.39000000000001,1.81,181,238.1928442415534,-5.5046622443876165,7.430000000000001,-1.6660919540230168,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,32.38999999999999,32.50000000000001,0.11,11,291.74953190129776,,7.415348849825832,,NH4 step region; pulse transient,M6_log,C_inv:c29e26a0fb89
+unclassified,32.49999999999999,33.00000000000001,0.5,50,292.21963684247487,,7.246279067080586,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+active_nitrification,32.99999999999999,33.07,0.07,7,291.7256032625074,1.384780470658733,7.242528727984162,0.17924485431689163,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,33.07,33.65,0.58,58,291.3554859185588,0.44141024658642314,7.227500005023263,0.03526931301780678,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,33.65,34.07,0.42,42,291.3403182754695,-0.008306553727847417,7.242616278368853,-0.27793738305274474,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,34.07,34.21,0.14,14,291.27264416984303,-0.09484147533103607,7.252209307348838,-0.4254865009355484,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,34.21,34.25000000000001,0.04,4,291.3469037762103,0.04849712761895537,7.270290693410482,-0.46302325581402215,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,34.24999999999999,34.28000000000001,0.03,3,291.38852356267444,0.18131264029453892,7.281609204077676,-0.46302325581402215,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,34.279999999999994,34.65,0.37,37,291.4596086575451,1.0071148055194978,7.275930236997289,-0.4506328521785008,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,34.65,34.720000000000006,0.07,7,290.84083947955884,1.6419139202928115,7.281511647415896,-0.2410518577920584,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,34.71999999999999,34.76,0.04,4,290.6585448746159,1.664440841951236,7.230024730802043,0.29839882384391103,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,34.76,35.470000000000006,0.71,71,290.3650916021081,0.17258410811832942,7.292209299054618,0.30256014434644385,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,35.46999999999999,35.50000000000001,0.03,3,290.53486382273957,-0.9571109667319182,7.328488372677128,0.24977011494257795,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,35.49999999999999,36.68,1.18,118,291.4145968293538,-3.35653674577548,7.323352044798973,-0.3853464982624928,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,36.68,36.71,0.03,3,294.8728885660714,-3.359228602777336,7.342325587469989,0.026765570703048525,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,36.71,37.21,0.5,50,295.104615297337,,7.387068968085605,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89
+sensor_artifact,37.21,37.32,0.11,11,299.69797764400994,,7.370000000000009,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,37.32,38.49,1.17,117,300.46811641156427,0.04364496031258874,7.336744178803684,1.2423336006415298,"no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,38.49,38.96,0.47000000000000003,47,300.27657626048426,0.09058794705062609,7.358255826219559,0.6670576049183978,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,38.96,40.220000000000006,1.26,126,300.70001872234616,-3.190062119459769,7.380344816000002,-0.6183393477678578,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+inactive_oversupplied,40.21999999999999,40.46,0.24,24,303.55678739963594,-1.530734220330197,7.38272052795485,-0.6773563218390279,"NH4 slope interval spans 0 and (ORP_rel ≥ +15 mV or pH rising), ORP_rel not ≤ −15 mV",M6_log,C_inv:c29e26a0fb89
+unclassified,40.46,41.00000000000001,0.54,54,304.2324417905413,6.363834911213188,7.390465118498644,-0.1153936113338574,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,40.99999999999999,41.11000000000001,0.11,11,293.6006297289105,16.94362927612392,7.3566279005516515,0.23206896551721456,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,41.10999999999999,41.32,0.21,21,292.41876394952,14.496542351752336,7.334597713477611,0.26050253942807444,"no indicator beyond its threshold, or low ORP with a rising ORP or pH",M6_log,C_inv:c29e26a0fb89
+active_nitrification,41.32,41.53000000000001,0.21,21,291.4854028888792,7.916800431055146,7.378139546098437,0.3070850040095934,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,41.529999999999994,41.59,0.06,6,290.5585812991084,6.005264669432832,7.389712645390407,0.3070850040095934,consumption with a rising pH (conflicting indicators),M6_log,C_inv:c29e26a0fb89
+active_nitrification,41.589999999999996,41.82,0.23,23,288.67727958100556,5.727755817015072,7.388735639717801,0.22630713712896977,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,41.82,44.65,2.83,283,294.9059194693424,-3.412233024086933,7.370348834756089,0.16717856188168412,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+sensor_artifact,44.65,44.76,0.11,11,292.1022861439784,,7.400000000000001,,NH4 step region,M6_log,C_inv:c29e26a0fb89
+unclassified,44.76,47.39000000000001,2.63,263,292.31262368408494,-0.7758769953279387,7.377441855792321,-0.38936781609186255,"C(t) rising without an N source (drift or evaporation); no indicator beyond its threshold, or low ORP with a rising ORP or pH; slope window crosses an artifact or event",M6_log,C_inv:c29e26a0fb89
+active_nitrification,47.38999999999999,47.42,0.03,3,294.4883709332575,2.934377917322612,7.332643669713839,0.6800547981823684,NH4 slope 95 % interval < 0 and pH not rising,M6_log,C_inv:c29e26a0fb89
+unclassified,47.419999999999995,47.92,0.5,50,294.7133271370876,,7.3355232576830804,,slope window crosses an artifact or event,M6_log,C_inv:c29e26a0fb89

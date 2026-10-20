@@ -72,8 +72,9 @@ def main(argv: list[str] | None = None) -> int:
 
             st = states.run(cfg, args.out_dir)
             whole = st.fractions[st.fractions["interval"] == "whole record"].iloc[0]
-            print(f"states: {100 * whole['classified_fraction']:.0f} % of the record classified; idle (inactive, "
-                  f"over-supplied) {100 * whole['idle_fraction_of_stirred_time']:.0f} % of stirred time; "
+            print(f"states: {100 * whole['classified_fraction']:.0f} % of the record classified (coverage); idle "
+                  f"(inactive, over-supplied) between {100 * whole['idle_fraction_lower_bound']:.0f} and "
+                  f"{100 * whole['idle_fraction_upper_bound']:.0f} % of stirred time; "
                   f"wrote {args.out_dir}/tables/states_*.csv")
         elif step == "pulses":
             from . import pulses

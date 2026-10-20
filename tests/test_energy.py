@@ -66,11 +66,11 @@ def test_energy_family_on_the_real_record(cfg, run_all_dir):
     assert m.loc[(1, "o2_supply_capacity_mgO2_SCENARIO_kLa10_T25C"), "value"] == pytest.approx(cap)
     sae = sorted(cfg.get("scenarios.sae_field_kgO2_per_kWh"))[1]  # the central SCENARIO value
     kwh_per_kg = cap / 1e6 / sae / (n / 1e6)
-    assert m.loc[(1, f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{sae:g}_kLa10_T25C"), "value"] == pytest.approx(kwh_per_kg)
-    assert m.loc[(1, f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{sae:g}"), "value"] == pytest.approx(4.57 / sae)
+    assert m.loc[(1, f"aeration_energy_supply_kWh_per_kgN_SCENARIO_AE{sae:g}_kLa10_T25C"), "value"] == pytest.approx(kwh_per_kg)
+    assert m.loc[(1, f"aeration_energy_demand_kWh_per_kgN_SCENARIO_AE{sae:g}"), "value"] == pytest.approx(4.57 / sae)
     assert m.loc[(1, "o2_required_mgO2"), "value"] == pytest.approx(4.57 * n)
     # every scenario value carries its label; no computed utilization exceeds 1 (an infeasible kLa gets a status)
-    fam = pm[pm["metric"].str.contains("SAE|kLa")]
+    fam = pm[pm["metric"].str.contains("AE|kLa")]
     assert fam["metric"].str.contains("SCENARIO").all()
     u = pm[pm["metric"].str.startswith("o2_utilization")]
     assert (u.loc[u["status"] == "computed", "value"] <= 1).all()

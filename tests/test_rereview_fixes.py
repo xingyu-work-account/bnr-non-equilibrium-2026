@@ -42,6 +42,13 @@ def test_reading_based_columns_say_sensitivity(cfg, segmented, validated):
     assert not any(c.startswith("delta_A_kJ_mol") for c in steps.columns)
     fa = [c for c in segmented.table.columns if c.startswith("fa_median")]
     assert fa and all("SENSITIVITY" in c for c in fa)
+    # pass 3 (X4): the linear-gain columns of segments.csv and thermo_oxygen.csv say SENSITIVITY in their names too
+    gain = [c for c in segmented.table.columns if "gain" in c and c not in ("gain_correction_status", "gain_corrected_role")]
+    assert len(gain) == 3 and all(c.startswith("consumption_SENSITIVITY_linear_gain") for c in gain)
+    oxy = thermo.oxygen_table(cfg, segmented.table, segmented.reference_windows, validated.pulse_table)
+    derived = [c for c in oxy.columns if c.startswith(("consumption", "o2_", "kla_"))]
+    assert len(derived) == 4 and all("SENSITIVITY" in c for c in derived)
+    assert "kla_required_per_d_SCENARIO_T25C" not in oxy.columns  # no longer shares the primary metric's name
 
 
 # --- S2: the inverted C(t) against the W2 bound ---------------------------------------------------------------------
@@ -156,8 +163,11 @@ def test_electrode_fragment_rule():
     j, c = "jump (electrode_offset)", "candidate (unlocated, sustained)"
     assert S.electrode_fragment(j, c, pd.NA, 0.5, 0.33)
     assert not S.electrode_fragment(j, c, pd.NA, 1.2, 0.33)  # longer than 3 delays
-    assert not S.electrode_fragment("jump (pulse_response)", c, pd.NA, 0.3, 0.33)  # a pulse response bounds it
-    assert not S.electrode_fragment(j, j, 4, 0.3, 0.33)  # governed by a pulse
+    # pass 3 (X6): the rule is extended symmetrically: a pulse-response jump is an electrode step, and a window
+    # governed by a pulse is a fragment as well; a pulse itself is not an electrode step
+    assert S.electrode_fragment("jump (pulse_response)", c, pd.NA, 0.3, 0.33)
+    assert S.electrode_fragment(j, j, 4, 0.3, 0.33)
+    assert not S.electrode_fragment("pulse 1", c, 1, 0.3, 0.33) and not S.electrode_fragment(j, "pulse 2", 1, 0.3, 0.33)
     assert not S.electrode_fragment(j, j, pd.NA, 0.3, float("nan"))
 
 
@@ -166,8 +176,11 @@ def test_real_fragments_are_demoted(segmented):
     frag = t[t["status"].str.contains("electrode fragment")]
     assert set(frag.index) >= {2, 3, 5, 7}  # the -21.8, +7.97, -8.49, +5.48 mg NH4+/L/d windows of the review
     assert frag["slope_mgNH4_L_d"].isna().all() and frag["slope_fragment_diagnostic_mgNH4_L_d"].notna().all()
-    assert frag["governing_pulse"].isna().all()
+    assert frag.loc[[2, 3, 5, 7], "governing_pulse"].isna().all()
+    # pass 3 (X6): the 0.31 d window 14 after the delayed pulse-1 response jump is a fragment under the symmetric rule
+    assert 14 in frag.index and frag.loc[14, "governing_pulse"] == 1
     assert t.loc[10, "status"] == "computed"  # 6.65-8.53 d ends at pulse 1: not a fragment
+    assert t.loc[15, "status"] == "computed"  # 9.39-10.57 d ends at pulse 2: not a fragment
 
 
 # --- W5 -------------------------------------------------------------------------------------------------------------

@@ -140,7 +140,7 @@ Stationarity: ADF p < 0.05 and KPSS p > 0.05 on the raw window; nothing is detre
 | ORP | process (relative) | 3 | 29 | 1 | 0.2019 | 1 | -1.038 | 1 | 0.05 | 1 | 0.01439 | 1 | 0.05 | 1 | 0.02026 | 1 | 0.05 |
 | ORP | process (relative) | 4 | 62 | 0 | 0.2251 | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN |
 | NH4 | process (offset-corrected, provisional) | 0 | 9 | 3 | 0.5605 | 3 | -1.081 | 3 | 0.000125 | 3 | 0.02301 | 3 | 0.000125 | 3 | 0.01279 | 3 | 0.000125 |
-| NH4 | process (offset-corrected, provisional) | 1 | 5 | 0 | 0.4097 | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN |
+| NH4 | process (offset-corrected, provisional) | 1 | 4 | 0 | 0.4069 | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN |
 | NH4 | process (offset-corrected, provisional) | 2 | 18 | 0 | 0.1876 | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN |
 | NH4 | process (offset-corrected, provisional) | 3 | 30 | 0 | 0.1196 | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN | 0 | not computed: no stationary window | NaN | NaN |
 | NH4 | process (offset-corrected, provisional) | 4 | 59 | 1 | 0.1834 | 1 | -0.9593 | 0 | 1 | 1 | 0.008236 | 0 | 1 | 1 | 0.006186 | 0 | 1 |
@@ -213,7 +213,7 @@ Kendall τ of the rolling (0.5 d) variance and lag-1 autocorrelation against tim
 | pH-ORP | 3 | 24.59 | 32.39 | 3 | 1 | 0.01381 | -0.01157 | 0.02979 | 424 | False |
 | pH-ORP | 4 | 32.39 | 47.92 | 1 | 0 | not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS) | NaN | NaN | NaN | NaN |
 | pH-NH4 | 0 | 1 | 8.53 | 2 | 0 | not computed: fewer than 100 increments in stationary input windows (0 of 2 windows pass ADF/KPSS) | NaN | NaN | NaN | NaN |
-| pH-NH4 | 1 | 8.53 | 10.57 | 2 | 0 | not computed: fewer than 100 increments in stationary input windows (0 of 2 windows pass ADF/KPSS) | NaN | NaN | NaN | NaN |
+| pH-NH4 | 1 | 8.53 | 10.57 | 1 | 0 | not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS) | NaN | NaN | NaN | NaN |
 | pH-NH4 | 2 | 10.57 | 24.59 | 3 | 2 | -0.02084 | -0.04479 | -0.002825 | 469 | True |
 | pH-NH4 | 3 | 24.59 | 32.39 | 1 | 0 | not computed: fewer than 100 increments in stationary input windows (0 of 1 windows pass ADF/KPSS) | NaN | NaN | NaN | NaN |
 | pH-NH4 | 4 | 32.39 | 47.92 | 3 | 1 | -0.008138 | -0.03308 | 0.03464 | 314 | False |

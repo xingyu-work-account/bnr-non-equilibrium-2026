@@ -3,7 +3,6 @@ reference pH,,7.3,0.12683797225688473,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not
 reference pH,,7.8,0.40109688612900324,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
 median pH of slope window,1,6.92,0.05287486729535506,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
 median pH of slope window,10,6.869999999999987,0.047124775080681074,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
-median pH of slope window,14,7.028662790218711,0.06790661472862713,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
 median pH of slope window,15,6.999595698035272,0.06351042053478559,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
 median pH of slope window,18,7.179595698876549,0.09612691157954724,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing
 median pH of slope window,19,7.809425310642891,0.409896869068853,"SCENARIO 25 °C (pK1, K_H at 25 °C)",not computed: alkalinity_mmol_L missing

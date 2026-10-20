@@ -10,41 +10,43 @@ State: true NH4 C(t) in mg N/L from day 1.0, +65.4643 mg N/L exactly at each pul
 
 Calibrate on days 1.0-24.59 (offsets after day 24.59 not fitted), select on 24.59-32.39 with all parameters frozen, test on 32.39-47.92 (split from config [pulses] times_d). In the test window, the 2 offset(s) detected there (unseen in calibration) are refitted as the only nuisance parameters; the pure forecast (nothing refitted) is reported up to the first unseen offset. Skill = 1 − MSE/MSE(no-consumption reference), in log units.
 
-| model | n_params_calibration | cal_rmse_log | cal_converged | sel_rmse_log | sel_rmse_mgN_L | test_rmse_log | test_rmse_mgN_L | forecast_window_d | forecast_rmse_log | forecast_rmse_mgN_L | sel_skill_vs_null | test_skill_vs_null | forecast_skill_vs_null | selected | whole_record_refit_rmse_log |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| null_no_consumption | 11 | 0.1181 | True | 0.3473 | 12.06 | 0.3051 | 12.16 | 32.39 to 37.219 | 0.5427 | 21.7 | 0 | 0 | 0 | False | NaN |
-| biomass_decay | 13 | 0.1138 | True | 0.07136 | 2.8 | 0.1533 | 7.686 | 32.39 to 37.219 | 0.2013 | 11.62 | 0.9578 | 0.7476 | 0.8625 | True | 0.09464 |
-| haldane_FA_SCENARIO_T20C | 14 | 0.1124 | True | 0.1392 | 6.122 | 0.216 | 10.93 | 32.39 to 37.219 | 0.2821 | 17.02 | 0.8394 | 0.4987 | 0.7298 | False | NaN |
-| combined_SCENARIO_T20C | 15 | 0.1116 | True | 0.239 | 11.17 | 0.358 | 23.51 | 32.39 to 37.219 | 0.5601 | 39.45 | 0.5266 | -0.377 | -0.06519 | False | NaN |
-| haldane_FA_SCENARIO_T25C | 14 | 0.1124 | True | 0.1384 | 6.086 | 0.2157 | 10.9 | 32.39 to 37.219 | 0.2813 | 16.97 | 0.8411 | 0.5002 | 0.7313 | False | NaN |
-| combined_SCENARIO_T25C | 15 | 0.1116 | True | 0.2395 | 11.2 | 0.3588 | 23.58 | 32.39 to 37.219 | 0.5615 | 39.58 | 0.5244 | -0.3831 | -0.0704 | False | NaN |
-| alkalinity_limited | 13 | 0.1115 | False | 0.08898 | 3.651 | 0.1305 | 6.064 | 32.39 to 37.219 | 0.1484 | 8.323 | 0.9344 | 0.8171 | 0.9252 | False | NaN |
-| alkalinity_FA_SCENARIO_T20C | 15 | 0.111 | False | 0.1235 | 5.297 | 0.1551 | 7.623 | 32.39 to 37.219 | 0.1936 | 11.15 | 0.8736 | 0.7416 | 0.8727 | False | NaN |
-| alkalinity_FA_SCENARIO_T25C | 15 | 0.1111 | False | 0.1196 | 5.113 | 0.1528 | 7.484 | 32.39 to 37.219 | 0.1899 | 10.91 | 0.8813 | 0.7491 | 0.8776 | False | NaN |
+Convergence policy, identical for every candidate (pass 3, X1): 4 starts per candidate, the default kinetic start multiplied by 0.5, 1, 2, 4 (Alk0 5, 10, 20, 40 meq/L), observation parameters at their default start; at most 8000 function evaluations per start; scipy least_squares (trf) default tolerances, converged = status > 0; the calibration is the converged start with the lowest RSS; the whole-record refit of the selected model has the same budget. Only a candidate whose calibration converged can be selected (`selection_status`); `alk0_*` is the fitted initial alkalinity of the alkalinity candidates with its 95 % profile interval on the calibration window (n_eff-scaled, as below).
 
-Selected on the selection window: **biomass_decay** (selection skill 0.958, test skill 0.748, pure-forecast skill 0.862). It was then refitted on the whole record (RMSE 0.0946 log units).
+| model | n_params_calibration | cal_rmse_log | cal_converged | cal_status | cal_nfev | cal_start | sel_rmse_log | sel_rmse_mgN_L | test_rmse_log | test_rmse_mgN_L | forecast_window_d | forecast_rmse_log | forecast_rmse_mgN_L | sel_skill_vs_null | test_skill_vs_null | forecast_skill_vs_null | selected | selection_status | alk0_fitted_meq_L | alk0_ci95_low_meq_L | alk0_ci95_high_meq_L | alk0_profile_status | whole_record_refit_rmse_log | whole_record_refit_converged |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| null_no_consumption | 11 | 0.1181 | True | 2 | 72 | default (no kinetic parameter) | 0.3473 | 12.06 | 0.3051 | 12.16 | 32.39 to 37.219 | 0.5427 | 21.7 | 0 | 0 | 0 | False | reference (not a candidate) | NaN | NaN | NaN |  | NaN | <NA> |
+| biomass_decay | 13 | 0.1138 | True | 2 | 391 | kinetic start x0.5 | 0.07134 | 2.798 | 0.1533 | 7.684 | 32.39 to 37.219 | 0.2012 | 11.61 | 0.9578 | 0.7477 | 0.8625 | True | selected | NaN | NaN | NaN |  | 0.09464 | True |
+| haldane_FA_SCENARIO_T20C | 14 | 0.1124 | True | 2 | 1263 | kinetic start x1 | 0.1392 | 6.122 | 0.216 | 10.93 | 32.39 to 37.219 | 0.2821 | 17.02 | 0.8394 | 0.4987 | 0.7298 | False | candidate (converged, not selected) | NaN | NaN | NaN |  | NaN | <NA> |
+| combined_SCENARIO_T20C | 15 | 0.1116 | True | 2 | 864 | kinetic start x4 | 0.2387 | 11.16 | 0.3577 | 23.48 | 32.39 to 37.219 | 0.5595 | 39.4 | 0.5276 | -0.3745 | -0.06305 | False | candidate (converged, not selected) | NaN | NaN | NaN |  | NaN | <NA> |
+| haldane_FA_SCENARIO_T25C | 14 | 0.1124 | True | 2 | 1093 | kinetic start x1 | 0.1384 | 6.086 | 0.2157 | 10.9 | 32.39 to 37.219 | 0.2813 | 16.97 | 0.8411 | 0.5002 | 0.7313 | False | candidate (converged, not selected) | NaN | NaN | NaN |  | NaN | <NA> |
+| combined_SCENARIO_T25C | 15 | 0.1116 | True | 2 | 900 | kinetic start x0.5 | 0.2395 | 11.2 | 0.3588 | 23.58 | 32.39 to 37.219 | 0.5615 | 39.58 | 0.5244 | -0.3831 | -0.07043 | False | candidate (converged, not selected) | NaN | NaN | NaN |  | NaN | <NA> |
+| alkalinity_limited | 13 | 0.1093 | True | 2 | 4884 | kinetic start x4 | 0.4797 | 27.06 | 0.2683 | 15.58 | 32.39 to 37.219 | 0.405 | 25.98 | -0.9079 | 0.2268 | 0.4431 | False | candidate (converged, not selected) | 79.97 | NaN | NaN | not identifiable: the profile has more than one minimum below Δ = 3.84 (fitted 80.0 meq/L; other converged start(s): Alk0 22.6 meq/L at Δ = 3.01; Alk0 22.6 meq/L at Δ = 3.01); no interval; local profile: profile stays below 3.84 on the high side(s) within the bounds or grid | NaN | <NA> |
+| alkalinity_FA_SCENARIO_T20C | 15 | 0.1109 | False | 0 | 32000 | kinetic start x1 | 0.1565 | 6.911 | 0.1807 | 9.286 | 32.39 to 37.219 | 0.2385 | 14.08 | 0.7969 | 0.6493 | 0.8069 | False | not computed: calibration did not converge (status 0: maximum number of function evaluations exceeded); skills not comparable | 23.61 | NaN | NaN | not computed: calibration did not converge (the value is not an estimate) | NaN | <NA> |
+| alkalinity_FA_SCENARIO_T25C | 15 | 0.1109 | False | 0 | 32000 | kinetic start x2 | 0.1561 | 6.891 | 0.1803 | 9.263 | 32.39 to 37.219 | 0.2378 | 14.03 | 0.7979 | 0.6507 | 0.8079 | False | not computed: calibration did not converge (status 0: maximum number of function evaluations exceeded); skills not comparable | 23.6 | NaN | NaN | not computed: calibration did not converge (the value is not an estimate) | NaN | <NA> |
+
+Selected on the selection window: **biomass_decay** (selection skill 0.958, test skill 0.748, pure-forecast skill 0.863). It was then refitted on the whole record (RMSE 0.0946 log units).
 
 ## Identifiability of the whole-record refit (profile likelihood)
 
 Δ(θ) = n_eff ln(RSS(θ)/RSS_min), with n_eff = n (1 − ρ)/(1 + ρ) from the residual lag-1 autocorrelation ρ, so that autocorrelated residuals do not overstate the information. 3 points per side, warm-started; a side is closed only by a converged re-optimization with Δ ≥ 3.84 (6 points were refitted without an evaluation cap). The interval ends are the roots of Δ(θ) = 3.84 found with Brent's method on the profile itself inside the bracketing grid step (tolerance 0.001 x the grid half-width; 163 profile evaluations), not linear interpolations. **Parameters marked not identifiable are not estimates**; their optimizer values are shown only for traceability.
 
-| parameter | scale | estimate | ci95_low | ci95_high | identifiable | reason | optimizer_value_not_an_estimate | profile_max_delta_low | profile_max_delta_high | profile_min_delta | better_optimum_found | n_eff | resid_lag1 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v0_mgN_L_d | log | 20 | 5.014 | 67.35 | True |  | NaN | 7.329 | 23.95 | 2.747 | False | 110.2 | 0.9541 |
-| kd_per_d | log | 0.1295 | 0.03562 | 0.2334 | True |  | NaN | 5.14 | 8.437 | 2.565 | False | 110.2 | 0.9541 |
-| C0_mgN_L | log | not identifiable | NaN | NaN | False | profile stays below 3.84 on the high side(s) within the bounds or grid | 185.8 | 6.531 | 1.841 | 1.841 | False | 110.2 | 0.9541 |
-| a | linear | not identifiable | NaN | NaN | False | profile stays below 3.84 on the low side(s) within the bounds or grid | -3.288 | 0.1466 | 144.2 | 0.1466 | False | 110.2 | 0.9541 |
-| b0 | linear | 1.324 | 0.6189 | 1.718 | True |  | NaN | 34.52 | 148.7 | 34.52 | False | 110.2 | 0.9541 |
-| b1_per_d | linear | -0.0008644 | -0.002641 | 0.00142 | True |  | NaN | 14.78 | 6.352 | 6.352 | False | 110.2 | 0.9541 |
-| tau_d | log | 0.2618 | 0.1649 | 0.3939 | True |  | NaN | 7.142 | 10.15 | 2.125 | False | 110.2 | 0.9541 |
-| offset_log_2.626d | linear | -0.345 | -0.6613 | -0.04969 | True |  | NaN | 7.472 | 9.437 | 2.242 | False | 110.2 | 0.9541 |
-| offset_log_3.214d | linear | 0.3488 | 0.04635 | 0.7112 | True |  | NaN | 9.315 | 5.712 | 1.698 | False | 110.2 | 0.9541 |
-| offset_log_5.571d | linear | -0.2316 | -0.4633 | 0.009819 | True |  | NaN | 9.042 | 8.046 | 2.115 | False | 110.2 | 0.9541 |
-| offset_log_6.547d | linear | 0.02329 | -0.2116 | 0.3434 | True |  | NaN | 10.9 | 5.136 | 1.537 | False | 110.2 | 0.9541 |
-| offset_log_8.553d | linear | 0.5313 | 0.1176 | 0.8532 | True |  | NaN | 9.207 | 4.667 | 3.022 | False | 110.2 | 0.9541 |
-| offset_log_17.875d | linear | -0.4405 | -0.5634 | -0.31 | True |  | NaN | 9.908 | 8.278 | 2.203 | False | 110.2 | 0.9541 |
-| offset_log_37.219d | linear | -0.5713 | -0.6729 | -0.4705 | True |  | NaN | 9.095 | 9.468 | 2.325 | False | 110.2 | 0.9541 |
-| offset_log_44.660d | linear | 0.1783 | 0.07239 | 0.2834 | True |  | NaN | 9.499 | 9.844 | 2.415 | False | 110.2 | 0.9541 |
+| parameter | scale | estimate | ci95_low | ci95_high | identifiable | reason | optimizer_value_not_an_estimate | profile_max_delta_low | profile_max_delta_high | profile_min_delta | profile_crossing_low | profile_crossing_high | better_optimum_found | n_eff | resid_lag1 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0_mgN_L_d | log | 20 | 5.014 | 67.35 | True |  | NaN | 7.328 | 23.95 | 2.747 | 5.014 | 67.35 | False | 110.2 | 0.9541 |
+| kd_per_d | log | 0.1296 | 0.03562 | 0.2334 | True |  | NaN | 5.139 | 8.438 | 2.564 | 0.03562 | 0.2334 | False | 110.2 | 0.9541 |
+| C0_mgN_L | log | not identifiable | NaN | NaN | False | profile stays below 3.84 on the high side(s) within the bounds or grid | 185.8 | 6.529 | 1.841 | 1.841 | 78.11 | NaN | False | 110.2 | 0.9541 |
+| a | linear | not identifiable | NaN | NaN | False | profile stays below 3.84 on the low side(s) within the bounds or grid | -3.29 | 0.1466 | 144.3 | 0.1466 | NaN | 0.5664 | False | 110.2 | 0.9541 |
+| b0 | linear | 1.325 | 0.6188 | 1.718 | True |  | NaN | 34.53 | 148.8 | 34.53 | 0.6188 | 1.718 | False | 110.2 | 0.9541 |
+| b1_per_d | linear | -0.0008648 | -0.002641 | 0.00142 | True |  | NaN | 14.78 | 6.351 | 6.351 | -0.002641 | 0.00142 | False | 110.2 | 0.9541 |
+| tau_d | log | 0.2618 | 0.1649 | 0.3939 | True |  | NaN | 7.142 | 10.15 | 2.125 | 0.1649 | 0.3939 | False | 110.2 | 0.9541 |
+| offset_log_2.626d | linear | -0.345 | -0.6613 | -0.04969 | True |  | NaN | 7.472 | 9.438 | 2.241 | -0.6613 | -0.04969 | False | 110.2 | 0.9541 |
+| offset_log_3.214d | linear | 0.3488 | 0.04635 | 0.7112 | True |  | NaN | 9.315 | 5.712 | 1.698 | 0.04635 | 0.7112 | False | 110.2 | 0.9541 |
+| offset_log_5.571d | linear | -0.2316 | -0.4633 | 0.009819 | True |  | NaN | 9.043 | 8.046 | 2.115 | -0.4633 | 0.009819 | False | 110.2 | 0.9541 |
+| offset_log_6.547d | linear | 0.02327 | -0.2116 | 0.3434 | True |  | NaN | 10.9 | 5.135 | 1.536 | -0.2116 | 0.3434 | False | 110.2 | 0.9541 |
+| offset_log_8.553d | linear | 0.5313 | 0.1176 | 0.8532 | True |  | NaN | 9.204 | 4.667 | 3.02 | 0.1176 | 0.8532 | False | 110.2 | 0.9541 |
+| offset_log_17.875d | linear | -0.4405 | -0.5634 | -0.31 | True |  | NaN | 9.908 | 8.277 | 2.203 | -0.5634 | -0.31 | False | 110.2 | 0.9541 |
+| offset_log_37.219d | linear | -0.5713 | -0.6729 | -0.4705 | True |  | NaN | 9.093 | 9.47 | 2.324 | -0.6729 | -0.4705 | False | 110.2 | 0.9541 |
+| offset_log_44.660d | linear | 0.1783 | 0.07239 | 0.2834 | True |  | NaN | 9.497 | 9.845 | 2.416 | 0.07239 | 0.2834 | False | 110.2 | 0.9541 |
 
 Interpretation, conditional on the model: the absolute NH4 level (C0) and the electrode intercept a are not identifiable, so the model does not determine absolute NH4 (NO-GO for absolute concentrations stands). The dose anchors the response, and the declining response fractions are explained by accumulation of NH4 under a log-type electrode with a non-drifting gain b, together with decaying activity, not by a drifting gain. The lag τ cannot reproduce the 7.5 h delayed jumps (a pure delay), and the residuals stay strongly autocorrelated: the model is misspecified at short time scales.
 
@@ -56,9 +58,9 @@ Interpretation, conditional on the model: the absolute NH4 level (C0) and the el
 | pulse adds exactly the dose | 10.57 d | 65.46 | 65.46 | True |
 | pulse adds exactly the dose | 24.59 d | 65.46 | 65.46 | True |
 | pulse adds exactly the dose | 32.39 d | 65.46 | 65.46 | True |
-| mass balance closes: C_end − (C0 + pulses − consumed) | whole record | 4.547e-13 | 0 | True |
-| consumption rate non-negative | every grid time | 0.04574 | >= 0 | True |
-| σ = r A / T ≥ 0 with the coexistence SCENARIO affinity | every grid time | 4.018e-08 | >= 0 | True |
+| mass balance closes: C_end − (C0 + pulses − consumed) | whole record | 1.705e-13 | 0 | True |
+| consumption rate non-negative | every grid time | 0.04571 | >= 0 | True |
+| σ = r A / T ≥ 0 with the coexistence SCENARIO affinity | every grid time | 4.014e-08 | >= 0 | True |
 | σ in situ | every grid time (model state C, observed pH) | not computed: DO_mg_L missing | >= 0 | not computed |
 
 ## Model-implied electrode response to each pulse (M2 window) vs observed
@@ -76,7 +78,7 @@ Every downstream NH4 quantity is derived from C(t) obtained by inverting this ob
 
 | key | value |
 | --- | --- |
-| nh4_truth_id | C_inv:58628090efe8 |
+| nh4_truth_id | C_inv:c29e26a0fb89 |
 | nh4_observation_model | M6_log |
 | model | biomass_decay |
 | inversion | quasi-static inversion C = exp((log R − a − offsets)/b(t)) of the 0.01 d grid reading; the sensor lag τ is not inverted (slopes after ~3τ are unaffected, window starts within 3τ of a boundary carry the lag transient) |
@@ -85,7 +87,7 @@ Every downstream NH4 quantity is derived from C(t) obtained by inverting this ob
 | band_low_open | False |
 | band_high_open | True |
 | open_reason | parameter C0_mgN_L: profile open on the high side moves C(t) up; parameter a: profile open on the low side moves C(t) up |
-| C_inv_start_median_mgN_L | 177.1 |
+| C_inv_start_median_mgN_L | 177.2 |
 | C_inv_start_band_low_mgN_L | 75.48 |
 | C_inv_start_band_high_mgN_L | 281.7 |
 | C_inv_end_median_mgN_L | 293.8 |

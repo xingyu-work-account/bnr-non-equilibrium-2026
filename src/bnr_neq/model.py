@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass, field
+import os
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +41,16 @@ PROFILE_POINTS_PER_SIDE = 3
 PROFILE_MAX_NFEV = 40  # per profile grid point; warm-started from the neighbouring point
 PROFILE_XTOL_FRACTION = 1e-3  # root-finding tolerance as a fraction of the profile half-width
 PROFILE_MAXITER = 40
+MULTIMODAL_LOG_TOL = math.log(1.05)  # another minimum: Alk0 more than 5 % away from the fitted value
+# X1: one convergence policy for every candidate's calibration (fixed from the pass-3 diagnosis before any refit)
+CAL_START_FACTORS = (0.5, 1.0, 2.0, 4.0)  # x the default kinetic start (Alk0: 5, 10, 20, 40 meq/L)
+CAL_MAX_NFEV = 8000  # per start, every candidate; > 2 x the 3,620 evaluations a converging W5 diagnostic run needed
+CONVERGENCE_POLICY = (f"{len(CAL_START_FACTORS)} starts per candidate, the default kinetic start multiplied by "
+                      f"{', '.join(f'{f:g}' for f in CAL_START_FACTORS)} (Alk0 5, 10, 20, 40 meq/L), observation "
+                      f"parameters at their default start; at most {CAL_MAX_NFEV} function evaluations per start; scipy "
+                      "least_squares (trf) default tolerances, converged = status > 0; the calibration is the converged "
+                      "start with the lowest RSS; the whole-record refit of the selected model has the same budget.")
+N_WORKERS = int(os.environ.get("BNR_NEQ_WORKERS", os.cpu_count() or 1))  # results do not depend on this
 
 # --- W1: the single NH4 observation model ---------------------------------------------------
 # Every downstream NH4 quantity (rates, free ammonia, conversion fraction, oxygen demand, affinity step) is derived
@@ -49,8 +61,16 @@ RAW_READING = "electrode_reading"  # measured slope of the reading; never an NH4
 SENSITIVITY_SUFFIX = "_SENSITIVITY"
 LINEAR_GAIN = "linear_gain" + SENSITIVITY_SUFFIX
 IDENTITY = "identity_reading_as_TAN" + SENSITIVITY_SUFFIX
-DERIVED_PREFIXES = ("fa_", "o2_", "kla_", "eta_", "delta_A", "free_energy", "alk0_required")
-INVERSION_NOTE = ("quasi-static inversion C = exp((log R − a − offsets)/b(t)) of the 0.01 d grid reading; the sensor "
+NH4_INDEPENDENT = "NH4-independent"  # explicit marker of a row that rests on no NH4 quantity (time, pH, capacity, ...)
+# X3: allow-list of the measured quantities of the raw reading; anything else on an electrode_reading row is derived
+# from removal, rate or concentration of the reading and raises (a deny-list of derived prefixes missed new metrics)
+RAW_MEASURED_METRICS = ("consumption_uncorrected_first_window_mgN_L_d", "consumption_uncorrected_weighted_mgN_L_d")
+RAW_MEASURED_COLUMNS = ("slope_mgNH4_L_d", "slope_ci95_low_mgNH4_L_d", "slope_ci95_high_mgNH4_L_d", "slope_mgN_L_d",
+                        "slope_ci95_low_mgN_L_d", "slope_ci95_high_mgN_L_d", "slope_excl_held_mgNH4_L_d",
+                        "slope_excl_held_ci95_low_mgNH4_L_d", "slope_excl_held_ci95_high_mgNH4_L_d",
+                        "slope_fragment_diagnostic_mgNH4_L_d", "median_nh4_mgN_L", "response_fraction_governing_pulse")
+MODEL_BASED_TOKEN = r"(?<![Nn]ot )(?<![A-Za-z0-9])MODEL[-_]BASED(?![A-Za-z0-9])"  # "not MODEL-BASED" is not the label
+INVERSION_NOTE =("quasi-static inversion C = exp((log R − a − offsets)/b(t)) of the 0.01 d grid reading; the sensor "
                   "lag τ is not inverted (slopes after ~3τ are unaffected, window starts within 3τ of a boundary carry "
                   "the lag transient)")
 
@@ -59,34 +79,66 @@ class ObservationModelError(ValueError):
     """An output combines NH4 quantities that rest on different observation models."""
 
 
+def _as_text(s: pd.Series) -> pd.Series:
+    """Cells as text; empty cells (NaN when read back from CSV) count as empty text."""
+    return s.map(lambda v: "" if pd.isna(v) else str(v))
+
+
 def check_single_observation_model(df: pd.DataFrame, model_col: str = "nh4_observation_model",
                                    label_cols: tuple[str, ...] = ("metric", "basis"),
-                                   series_col: str = "nh4_series") -> str | None:
-    """Raise :class:`ObservationModelError` unless every primary NH4 row of ``df`` uses one observation model.
+                                   series_col: str = "nh4_series",
+                                   independent_cols: tuple[str, ...] | None = None) -> str | None:
+    """Raise :class:`ObservationModelError` unless every row of ``df`` declares its NH4 basis and every primary row
+    uses one observation model and one series. Returns the primary model.
 
-    Rows whose model ends in ``_SENSITIVITY`` must say SENSITIVITY in their label columns (and only they may);
-    the raw electrode reading may appear only as a measured, non-derived quantity. When ``series_col`` is present,
-    the primary rows must also share one series (:func:`check_single_series`). Returns the primary model.
+    - Every row declares a basis (X3): ``OBSERVATION_MODEL``, a model ending in ``_SENSITIVITY``, ``RAW_READING`` or
+      the explicit marker ``NH4_INDEPENDENT``. An empty or unknown model raises.
+    - Rows of a ``_SENSITIVITY`` model say SENSITIVITY in their label columns and, in a long table, in the metric name;
+      no other row may say SENSITIVITY.
+    - A ``RAW_READING`` row may carry only a measured quantity of the reading: in a long table (``metric`` column) a
+      metric of ``RAW_MEASURED_METRICS``. In a wide table (one column per quantity), every column of a reading-based
+      row is a measured column (``RAW_MEASURED_COLUMNS``), says SENSITIVITY in its name, or is declared NH4-independent
+      in ``independent_cols``.
+    - ``NH4_INDEPENDENT`` rows carry no NH4 series. Primary rows share one series (:func:`check_single_series`).
     """
-    m = df[model_col].fillna("").astype(str)
+    m = _as_text(df[model_col])
     cols = [c for c in label_cols if c in df.columns]
-    # empty cells (NaN when read back from CSV) count as empty text
-    text = (df[cols].apply(lambda col: col.map(lambda v: "" if pd.isna(v) else str(v))).agg(" ".join, axis=1)
-            if cols else pd.Series("", index=df.index))
+    text = (df[cols].apply(_as_text).agg(" ".join, axis=1) if cols else pd.Series("", index=df.index))
+    metric = _as_text(df["metric"]) if "metric" in df.columns else None
     sens = m.str.endswith(SENSITIVITY_SUFFIX)
+    raw, indep = m == RAW_READING, m == NH4_INDEPENDENT
+
+    def where(mask):
+        return sorted(set(metric[mask])) if metric is not None else f"{int(mask.sum())} row(s)"
+
+    if (m == "").any():
+        raise ObservationModelError(f"rows without a declared NH4 basis (empty {model_col}): {where(m == '')}")
     if (sens & ~text.str.contains("SENSITIVITY")).any():
         raise ObservationModelError(f"sensitivity rows without a SENSITIVITY label: {sorted(set(m[sens]))}")
-    if (~sens & (m != "") & text.str.contains("SENSITIVITY")).any():
+    if metric is not None and (sens & ~metric.str.contains("SENSITIVITY")).any():
+        raise ObservationModelError(f"reading-based metrics without SENSITIVITY in their names: {where(sens & ~metric.str.contains('SENSITIVITY'))}")
+    if (~sens & text.str.contains("SENSITIVITY")).any():
         raise ObservationModelError("a row labelled SENSITIVITY carries a primary observation model")
-    if "metric" in df.columns:
-        raw_derived = (m == RAW_READING) & df["metric"].astype(str).str.startswith(DERIVED_PREFIXES)
+    if metric is not None:
+        raw_derived = raw & ~metric.isin(RAW_MEASURED_METRICS)
         if raw_derived.any():
-            raise ObservationModelError(f"derived quantities from the raw electrode reading: "
-                                        f"{sorted(set(df.loc[raw_derived, 'metric']))}")
-    is_primary = (m != "") & (m != RAW_READING) & ~sens
+            raise ObservationModelError(f"derived quantities from the raw electrode reading: {where(raw_derived)}")
+    elif (raw | sens).any():
+        if independent_cols is None:
+            raise ObservationModelError("a wide table with reading-based rows must declare its NH4-independent columns")
+        skip = {model_col, series_col, *cols, *independent_cols}
+        bad = [c for c in df.columns if c not in skip and c not in RAW_MEASURED_COLUMNS and "SENSITIVITY" not in c]
+        if bad:
+            raise ObservationModelError(f"reading-based columns without SENSITIVITY in their names: {bad}")
+    if series_col in df.columns and (indep & (_as_text(df[series_col]) != "")).any():
+        raise ObservationModelError(f"{NH4_INDEPENDENT} rows carry an NH4 series: {where(indep & (_as_text(df[series_col]) != ''))}")
+    is_primary = ~sens & ~raw & ~indep
     primary = sorted(set(m[is_primary]))
     if len(primary) > 1:
         raise ObservationModelError(f"one output mixes NH4 observation models: {primary}")
+    if primary and primary[0] != OBSERVATION_MODEL:
+        raise ObservationModelError(f"undeclared NH4 basis {primary[0]!r}: expected {OBSERVATION_MODEL}, a model ending "
+                                    f"in {SENSITIVITY_SUFFIX}, {RAW_READING} or {NH4_INDEPENDENT}")
     if series_col in df.columns and is_primary.any():
         check_single_series(df[is_primary], text[is_primary], series_col)
     return primary[0] if primary else None
@@ -98,8 +150,8 @@ MODEL_STATE_PREFIX = "M6_state:"  # series of the simulated model state (MODEL-B
 def check_single_series(rows: pd.DataFrame, text: pd.Series, series_col: str = "nh4_series") -> None:
     """Primary rows must share one inverted C(t) series; MODEL-BASED rows (and only they) may instead use one simulated
     model-state series of the same observation model. Raises :class:`ObservationModelError` otherwise."""
-    s = rows[series_col].map(lambda v: "" if pd.isna(v) else str(v))
-    model_based = text.str.contains("MODEL-BASED|MODEL_BASED", regex=True)
+    s = _as_text(rows[series_col])
+    model_based = text.str.contains(MODEL_BASED_TOKEN, regex=True)
     if (s == "").any():
         raise ObservationModelError("primary NH4 rows without a series identifier")
     state = s.str.startswith(MODEL_STATE_PREFIX)
@@ -361,11 +413,18 @@ class Fit:
     rss: float
     n: int
     converged: bool
+    status: int = 1  # least_squares status (0: evaluation budget exhausted; > 0: a tolerance was met)
+    nfev: int = 0  # function evaluations (all starts, for a calibration under the convergence policy)
+    start: str = ""  # the start of the convergence policy that gave this fit
 
 
 def fit(spec: ModelSpec, data: ModelData, lay: Layout, window: tuple[float, float], x0: np.ndarray,
         free: np.ndarray, max_nfev: int | None = None) -> Fit:
-    """Least squares in log space over bins in ``window``; parameters not in ``free`` stay at x0."""
+    """Least squares in log space over bins in ``window``; parameters not in ``free`` stay at x0.
+
+    The state model and the lag filter are causal, so the record after the window cannot change a residual inside it:
+    the simulation stops at the window end (bit-identical residuals, half the cost for the calibration window)."""
+    data = truncated(data, window[1])
     mask = (data.t >= window[0]) & (data.t < window[1])
     x0 = np.clip(x0.copy(), lay.lo + 1e-9, lay.hi - 1e-9)
 
@@ -381,7 +440,17 @@ def fit(spec: ModelSpec, data: ModelData, lay: Layout, window: tuple[float, floa
                         max_nfev=max_nfev)
     x = x0.copy()
     x[free] = sol.x
-    return Fit(spec, x, free, window, float(sol.fun @ sol.fun), int(mask.sum()), bool(sol.success))
+    return Fit(spec, x, free, window, float(sol.fun @ sol.fun), int(mask.sum()), bool(sol.success), int(sol.status),
+               int(sol.nfev))
+
+
+def truncated(data: ModelData, t_end: float) -> ModelData:
+    """The bins before ``t_end`` (the same object when none is cut)."""
+    keep = data.t < t_end
+    if keep.all():
+        return data
+    return ModelData(t=data.t[keep], log_r=data.log_r[keep], ph=data.ph[keep], pulses=data.pulses, dose=data.dose,
+                     offsets=data.offsets, offset_guess=data.offset_guess)
 
 
 def window_skill(spec, data, lay, x, window) -> dict:
@@ -393,12 +462,62 @@ def window_skill(spec, data, lay, x, window) -> dict:
             "n": int(mask.sum())}
 
 
+def calibration_starts(spec: ModelSpec, lay: Layout, x0: np.ndarray) -> list[tuple[str, np.ndarray]]:
+    """X1: the starts of the convergence policy (the kinetic parameters are on the log scale, so a factor is a shift)."""
+    if not spec.kinetic:
+        return [("default (no kinetic parameter)", x0)]
+    out = []
+    for f in CAL_START_FACTORS:
+        x = x0.copy()
+        x[:len(spec.kinetic)] += math.log(f)
+        out.append((f"kinetic start x{f:g}", np.clip(x, lay.lo + 1e-9, lay.hi - 1e-9)))
+    return out
+
+
+def _calibration_job(args) -> Fit:
+    spec, data, lay, window, x0, free, start = args
+    f = fit(spec, data, lay, window, x0, free, max_nfev=CAL_MAX_NFEV)
+    f.start = start
+    return f
+
+
+def best_start(fits: list[Fit]) -> Fit:
+    """The converged start with the lowest RSS (ties: the earlier start); else the lowest-RSS start, unconverged.
+    ``nfev`` is the total over the starts."""
+    conv = [f for f in fits if f.converged]
+    best = min(conv or fits, key=lambda f: f.rss)  # min keeps the first of equal values
+    return replace(best, nfev=sum(f.nfev for f in fits))
+
+
+def _map(fn, tasks: list) -> list:
+    if N_WORKERS > 1 and len(tasks) > 1:
+        with ProcessPoolExecutor(max_workers=min(N_WORKERS, len(tasks))) as pool:
+            return list(pool.map(fn, tasks))
+    return [fn(t) for t in tasks]
+
+
+def calibrate_all(specs: list[ModelSpec], data: ModelData, window: tuple[float, float],
+                  setup: dict[str, tuple[Layout, np.ndarray, np.ndarray]]) -> tuple[dict[str, Fit], dict[str, list[Fit]]]:
+    """Calibrate every candidate under the convergence policy; every (candidate, start) pair runs in parallel.
+    Returns the calibration of each candidate and every start's fit."""
+    tasks, owner = [], []
+    for spec in specs:
+        lay, x0, free = setup[spec.name]
+        for label, xs in calibration_starts(spec, lay, x0):
+            tasks.append((spec, data, lay, window, xs, free, label))
+            owner.append(spec.name)
+    done = _map(_calibration_job, tasks)
+    starts = {spec.name: [f for o, f in zip(owner, done) if o == spec.name] for spec in specs}
+    return {name: best_start(fs) for name, fs in starts.items()}, starts
+
+
 def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None = None) -> tuple[pd.DataFrame, dict]:
     """Calibrate on CAL, evaluate frozen on SEL, then TEST (unseen offsets as the only nuisance)."""
     w = split_windows(cfg) if windows is None else windows
     CAL, SEL, TEST = w.cal, w.sel, w.test
-    rows, fits = [], {}
-    for spec in model_specs(cfg):
+    rows, fits, setup = [], {}, {}
+    specs = model_specs(cfg)
+    for spec in specs:
         lay = layout(spec, data)
         x0 = initial_guess(spec, data, lay)
         free = np.ones(len(x0), dtype=bool)
@@ -406,7 +525,20 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
             if t >= CAL[1]:
                 free[len(lay.names) - len(data.offsets) + i] = False
                 x0[len(lay.names) - len(data.offsets) + i] = 0.0
-        cal = fit(spec, data, lay, CAL, x0, free)
+        setup[spec.name] = (lay, x0, free)
+    cals, all_starts = calibrate_all(specs, data, CAL, setup)
+    start_rows = []
+    for spec in specs:
+        lay = setup[spec.name][0]
+        for f in all_starts[spec.name]:
+            start_rows.append({"model": spec.name, "start": f.start, "converged": f.converged, "status": f.status,
+                               "nfev": f.nfev, "cal_rmse_log": math.sqrt(f.rss / f.n),
+                               "alk0_meq_L": unpack(spec, data, lay, f.x)["Alk0_meq_L"] if spec.alk else np.nan,
+                               "sel_rmse_log_diagnostic": window_skill(spec, data, lay, f.x, SEL)["rmse_log"],
+                               "chosen": f.start == cals[spec.name].start})
+    for spec in specs:
+        lay, x0, free = setup[spec.name]
+        cal = cals[spec.name]
         sel = window_skill(spec, data, lay, cal.x, SEL)
         test_off = np.array([n.startswith("offset_log_") and float(n[11:-1]) >= TEST[0] for n in lay.names])
         test_fit = fit(spec, data, lay, TEST, cal.x, test_off)
@@ -416,6 +548,7 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
         forecast = window_skill(spec, data, lay, cal.x, fc_window)
         rows.append({"model": spec.name, "n_params_calibration": int(free.sum()),
                      "cal_rmse_log": math.sqrt(cal.rss / cal.n), "cal_converged": cal.converged,
+                     "cal_status": cal.status, "cal_nfev": cal.nfev, "cal_start": cal.start,
                      "sel_rmse_log": sel["rmse_log"], "sel_rmse_mgN_L": sel["rmse_mgN_L"],
                      "test_rmse_log": test["rmse_log"], "test_rmse_mgN_L": test["rmse_mgN_L"],
                      "test_nuisance": f"offsets at {', '.join(f'{t:.3f}' for t in unseen)} d refitted on the test window; "
@@ -427,10 +560,47 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
     null = df.set_index("model").loc["null_no_consumption"]
     for col in ("sel", "test", "forecast"):
         df[f"{col}_skill_vs_null"] = 1 - df[f"{col}_rmse_log"] ** 2 / null[f"{col}_rmse_log"] ** 2
-    cand = df[df["model"] != "null_no_consumption"]
+    df = select_converged(df)
+    alk = pd.DataFrame(_map(_alk0_job, [(spec, data, lay, cal, all_starts[spec.name]) for spec, lay, cal in fits.values()]))
+    out = pd.concat([df, alk], axis=1)
+    st = pd.DataFrame(start_rows)
+    st["sel_skill_vs_null_diagnostic"] = 1 - st["sel_rmse_log_diagnostic"] ** 2 / float(
+        df.set_index("model").loc[NULL_MODEL, "sel_rmse_log"]) ** 2
+    st["role"] = ("DIAGNOSTIC: every start of the convergence policy; the calibration is the converged start with the "
+                  "lowest RSS (chosen); the selection skill of the other starts is not used")
+    out.attrs["starts"] = st
+    return out, fits
+
+
+def _alk0_job(args) -> dict:
+    return alk0_profile(*args)
+
+
+NULL_MODEL = "null_no_consumption"
+LSQ_STATUS = {-1: "improper input", 0: "maximum number of function evaluations exceeded", 1: "gtol satisfied",
+              2: "ftol satisfied", 3: "xtol satisfied", 4: "ftol and xtol satisfied"}
+
+
+class SelectionError(RuntimeError):
+    """No candidate model has a converged calibration, so none can be selected."""
+
+
+def select_converged(df: pd.DataFrame) -> pd.DataFrame:
+    """X1: select by minimum selection RMSE among the candidates whose calibration converged; an unconverged candidate
+    keeps its skills in the table, labelled by ``selection_status``, and cannot be selected."""
+    out = df.copy()
+    conv = out["cal_converged"].astype(bool)
+    cand = out[(out["model"] != NULL_MODEL) & conv]
+    if cand.empty:
+        raise SelectionError("no candidate calibration converged under the convergence policy")
     selected = cand.loc[cand["sel_rmse_log"].idxmin(), "model"]
-    df["selected"] = df["model"] == selected
-    return df, fits
+    out["selected"] = out["model"] == selected
+    out["selection_status"] = [
+        "reference (not a candidate)" if m == NULL_MODEL else
+        f"not computed: calibration did not converge (status {st}: {LSQ_STATUS.get(int(st), '?')}); skills not "
+        "comparable" if not c else "selected" if m == selected else "candidate (converged, not selected)"
+        for m, c, st in zip(out["model"], conv, out["cal_status"])]
+    return out
 
 
 # --- Identifiability -------------------------------------------------------------------------
@@ -480,9 +650,11 @@ def profile_interval(delta, x_best: float, half: float, lo: float, hi: float,
     return out
 
 
-def profile_likelihood(spec, data, lay, best: Fit, collect: list | None = None) -> pd.DataFrame:
+def profile_likelihood(spec, data, lay, best: Fit, collect: list | None = None,
+                       params: tuple[str, ...] | None = None) -> pd.DataFrame:
     """Profile Δ(θ_i) = n_eff ln(RSS(θ_i)/RSS_min); identifiable if Δ ≥ 3.84 is reached on both sides within
-    the bounds; the 95 % interval ends are the roots of Δ(θ_i) = 3.84 (:func:`profile_interval`).
+    the bounds; the 95 % interval ends are the roots of Δ(θ_i) = 3.84 (:func:`profile_interval`). ``params`` restricts
+    the profiles to those parameters; parameters that ``best`` kept fixed stay fixed.
 
     ``collect``, if given, receives (parameter, value, Δ, converged, x) for every profile evaluation (W1 uses the
     converged vectors with Δ ≤ 3.84 to propagate parameter uncertainty into the inverted C(t))."""
@@ -502,8 +674,10 @@ def profile_likelihood(spec, data, lay, best: Fit, collect: list | None = None) 
     n_refits = [0]
     n_evals = [0]
     for i, name in enumerate(lay.names):
+        if params is not None and name not in params:
+            continue
         half = max(4 * se[i], 1.0 if lay.log[i] else 0.2 if name != "b1_per_d" else 0.01)
-        free = np.ones(len(best.x), dtype=bool)
+        free = best.free.copy()
         free[i] = False
         solved = [(best.x[i], best.x.copy())]  # (value, solution) for warm starts
 
@@ -542,12 +716,54 @@ def profile_likelihood(spec, data, lay, best: Fit, collect: list | None = None) 
             "profile_max_delta_low": max((d for _, d, _ in prof["low"]["points"]), default=np.nan),
             "profile_max_delta_high": max((d for _, d, _ in prof["high"]["points"]), default=np.nan),
             "profile_min_delta": min_delta,
+            # one-sided 95 % limits: the crossing of a side that closed, also when the other side stays open
+            "profile_crossing_low": to_nat(prof["low"]["crossing"]) if closed["low"] else np.nan,
+            "profile_crossing_high": to_nat(prof["high"]["crossing"]) if closed["high"] else np.nan,
             "better_optimum_found": bool(min_delta < -0.5),
             "n_eff": n_eff, "resid_lag1": rho,
         })
     out = pd.DataFrame(rows)
     out.attrs["uncapped_refits"] = n_refits[0]
     out.attrs["profile_evaluations"] = n_evals[0]
+    return out
+
+
+def alk0_profile(spec: ModelSpec, data: ModelData, lay: Layout, cal: Fit, others: list[Fit] | None = None) -> dict:
+    """X1 (d): fitted Alk0 of an alkalinity candidate (its calibration) and the 95 % profile interval of Alk0 on the
+    calibration window, or ``not identifiable``; empty for the other candidates.
+
+    The profile is warm-started from neighbouring points, so it follows one minimum. Any other converged start of the
+    policy (``others``) whose Alk0 differs and whose Δ = n_eff ln(RSS/RSS_min) is below 3.84 lies inside the 95 %
+    region as well; the region is then not one interval and no limit is reported (a validity condition)."""
+    out = {"alk0_fitted_meq_L": np.nan, "alk0_ci95_low_meq_L": np.nan, "alk0_ci95_high_meq_L": np.nan,
+           "alk0_profile_status": ""}
+    if not spec.alk:
+        return out
+    out["alk0_fitted_meq_L"] = unpack(spec, data, lay, cal.x)["Alk0_meq_L"]
+    if not cal.converged:
+        out["alk0_profile_status"] = "not computed: calibration did not converge (the value is not an estimate)"
+        return out
+    r = profile_likelihood(spec, data, lay, cal, params=("Alk0_meq_L",)).iloc[0]
+    a_best = out["alk0_fitted_meq_L"]
+    inside = []
+    for f in others or []:
+        a_f = unpack(spec, data, lay, f.x)["Alk0_meq_L"]
+        d = float(r["n_eff"]) * math.log(f.rss / cal.rss) if f.rss > 0 else 0.0
+        if f.converged and abs(math.log(a_f / a_best)) > MULTIMODAL_LOG_TOL and d < CHI2_95_1DOF:
+            inside.append((a_f, d))
+    if inside:
+        mins = "; ".join(f"Alk0 {a:.1f} meq/L at Δ = {d:.2f}" for a, d in sorted(inside))
+        out["alk0_profile_status"] = (f"not identifiable: the profile has more than one minimum below Δ = 3.84 (fitted "
+                                      f"{a_best:.1f} meq/L; other converged start(s): {mins}); no interval"
+                                      + ("" if r["identifiable"] else f"; local profile: {r['reason']}"))
+        return out
+    if r["identifiable"]:
+        out.update(alk0_ci95_low_meq_L=r["ci95_low"], alk0_ci95_high_meq_L=r["ci95_high"], alk0_profile_status="identifiable")
+        return out
+    out.update(alk0_ci95_low_meq_L=r["profile_crossing_low"], alk0_ci95_high_meq_L=r["profile_crossing_high"])
+    one = [f"one-sided 95 % {side} limit {v:.1f} meq/L" for side, v in (("lower", r["profile_crossing_low"]),
+                                                                    ("upper", r["profile_crossing_high"])) if np.isfinite(v)]
+    out["alk0_profile_status"] = f"not identifiable: {r['reason']}" + (f"; {', '.join(one)}" if one else "")
     return out
 
 
@@ -692,6 +908,7 @@ class ModelResult:
     windows: SplitWindows | None = None
     offsets: list[float] = field(default_factory=list)
     truth: Truth | None = None
+    starts: pd.DataFrame | None = None  # every start of the convergence policy (X1)
 
 
 def load_inputs(out_dir: Path) -> dict:
@@ -709,10 +926,12 @@ def load_inputs(out_dir: Path) -> dict:
 def compute(cfg: Config, inputs: dict) -> ModelResult:
     data = build_data(cfg, inputs["grid"], inputs["jumps"])
     comparison, fits = split_evaluation(cfg, data)
+    starts = comparison.attrs.get("starts")
     selected = comparison.loc[comparison["selected"], "model"].iloc[0]
     spec, lay, cal = fits[selected]
-    full = fit(spec, data, lay, (T0_D, END_D), cal.x, np.ones(len(cal.x), dtype=bool))
+    full = fit(spec, data, lay, (T0_D, END_D), cal.x, np.ones(len(cal.x), dtype=bool), max_nfev=CAL_MAX_NFEV)
     comparison["whole_record_refit_rmse_log"] = np.where(comparison["selected"], math.sqrt(full.rss / full.n), np.nan)
+    comparison["whole_record_refit_converged"] = np.where(comparison["selected"], full.converged, pd.NA)
     points: list = []
     ident = profile_likelihood(spec, data, lay, full, collect=points)
     truth = nh4_truth(spec, data, lay, full, ident, points)
@@ -728,7 +947,8 @@ def compute(cfg: Config, inputs: dict) -> ModelResult:
         "model_electrode_wholefit_mgN_L": np.exp(lr_full), "model_electrode_calibration_fit_mgN_L": np.exp(lr_cal),
         "model_state_C_mgN_L_conditional_on_C0": sim.c, "model_rate_mgN_L_d": sim.rate,
         "gain_b": p["b0"] + p["b1_per_d"] * (data.t - T0_D)})
-    return ModelResult(comparison, ident, checks, resp, state, selected, split_windows(cfg), list(data.offsets), truth)
+    return ModelResult(comparison, ident, checks, resp, state, selected, split_windows(cfg), list(data.offsets), truth,
+                       starts)
 
 
 def figure(cfg: Config, r: ModelResult, png: Path, svg: Path) -> None:
@@ -830,6 +1050,10 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         "calibration) are refitted as the only nuisance parameters; the pure forecast (nothing refitted) is reported up to "
         "the first unseen offset. Skill = 1 − MSE/MSE(no-consumption reference), in log units."),
         "",
+        (f"Convergence policy, identical for every candidate (pass 3, X1): {CONVERGENCE_POLICY} Only a candidate whose "
+         "calibration converged can be selected (`selection_status`); `alk0_*` is the fitted initial alkalinity of the "
+         "alkalinity candidates with its 95 % profile interval on the calibration window (n_eff-scaled, as below)."),
+        "",
         md_table(c.drop(columns=["test_nuisance"])),
         "",
         (f"Selected on the selection window: **{r.selected}** (selection skill {sel['sel_skill_vs_null']:.3f}, test skill "
@@ -885,6 +1109,7 @@ def run(cfg: Config, out_dir) -> ModelResult:
     d = out_dirs(out_dir)
     r = compute(cfg, inputs)
     r.comparison.to_csv(d["tables"] / "model_fit.csv", index=False)
+    r.starts.to_csv(d["tables"] / "model_calibration_starts.csv", index=False)
     r.identifiability.to_csv(d["tables"] / "model_identifiability.csv", index=False)
     r.checks.to_csv(d["tables"] / "model_checks.csv", index=False)
     r.responses.to_csv(d["tables"] / "model_response_fractions.csv", index=False)

@@ -28,7 +28,7 @@ A = −ΔG for NH4+ + 2 O2(g) → NO3- + 2 H+ + H2O, with p_O2 = 0.2095 x DO / 8
 | SCENARIO | 40 | 100 | 1 | 7 | 25 | 0.02536 | 328.3 | False |  |
 | SCENARIO | 40 | 100 | 3 | 7 | 25 | 0.07609 | 333.8 | False |  |
 | SCENARIO | 40 | 100 | 8 | 7 | 25 | 0.2029 | 338.6 | False |  |
-| IN SITU | NaN | NaN | NaN | NaN | NaN | NaN | not computed: DO_mg_L missing | False | inputs: observed NH4-N and pH medians of 10 slope windows; needs DO_mg_L, NO3_N_mg_L |
+| IN SITU | NaN | NaN | NaN | NaN | NaN | NaN | not computed: DO_mg_L missing | False | inputs: observed NH4-N and pH medians of 9 slope windows; needs DO_mg_L, NO3_N_mg_L |
 
 ## Bare Ag reference: chloride SCENARIOS
 
@@ -54,7 +54,7 @@ Observed changes and the oxide-controlled alternative (E_ref = 1.173 − (RT ln1
 | 3 | 0.125 | 0 | 0 | not computed: chloride_mmol_L missing | 112.4 | not computed: S4 |
 | 4 | 0.21 | 0.04 | 2.366 | not computed: chloride_mmol_L missing | 169.2 | not computed: S4 |
 
-Oxide-controlled E_ref at the median pH of the slope windows (7.23): 0.745 V vs SHE, against 0.331 to 0.400 V for the chloride SCENARIOS: the surface state alone moves E_ref by hundreds of mV, so E_H is undetermined.
+Oxide-controlled E_ref at the median pH of the slope windows (7.28): 0.742 V vs SHE, against 0.331 to 0.400 V for the chloride SCENARIOS: the surface state alone moves E_ref by hundreds of mV, so E_H is undetermined.
 
 ## CO2 at the open surface
 
@@ -66,7 +66,6 @@ Oxide-controlled E_ref at the median pH of the slope windows (7.23): 0.745 V vs 
 | reference pH | <NA> | 7.8 | 0.4011 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
 | median pH of slope window | 1 | 6.92 | 0.05287 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
 | median pH of slope window | 10 | 6.87 | 0.04712 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
-| median pH of slope window | 14 | 7.029 | 0.06791 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
 | median pH of slope window | 15 | 7 | 0.06351 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
 | median pH of slope window | 18 | 7.18 | 0.09613 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
 | median pH of slope window | 19 | 7.809 | 0.4099 | SCENARIO 25 °C (pK1, K_H at 25 °C) | not computed: alkalinity_mmol_L missing |
@@ -79,19 +78,18 @@ Oxide-controlled E_ref at the median pH of the slope windows (7.23): 0.745 V vs 
 
 Demand = 4.57 x gain-corrected consumption; required k_La ≥ demand / C*, C* = 8.26 mg/L (SCENARIO 25 °C, to be replaced by a temperature function). Since W1 the single NH4 observation model is the M6 log model; this table is a labelled sensitivity case and the primary O2 demand is in `nh4_truth_windows.csv` (pulses stage). Oxygen claims are NO-GO until DO and k_La are measured.
 
-| sub_segment | fit_start_d | fit_end_d | governing_pulse | consumption_gain_corrected_mgN_L_d | held_fraction | o2_demand_mgO2_L_d_GAIN_CORRECTED | kla_required_per_d_SCENARIO_T25C | status | kla_measured_over_required | role |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1.1 | 2.625 | NaN | NaN | 0.5245 | NaN | NaN | not computed: no governing pulse (baseline) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 10 | 6.647 | 8.53 | NaN | NaN | 0 | NaN | NaN | not computed: no governing pulse (baseline) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 14 | 8.958 | 9.269 | 1 | 16.96 | 0 | 77.53 | 9.386 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 15 | 9.39 | 10.57 | 1 | 4.338 | 0 | 19.82 | 2.4 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 18 | 10.98 | 17.88 | 2 | 5.191 | 0.7074 | 23.72 | 2.872 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 19 | 17.98 | 24.59 | 2 | 1.549 | 0.5767 | 7.077 | 0.8568 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 21 | 24.76 | 32.39 | 3 | 1.435 | 0 | 6.556 | 0.7937 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 23 | 32.5 | 37.22 | 4 | 1.319 | 0 | 6.029 | 0.7299 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 24 | 37.32 | 44.66 | 4 | 1.261 | 0 | 5.763 | 0.6978 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| 25 | 44.76 | 47.92 | 4 | NaN | 0 | NaN | NaN | not computed: non-positive gain-corrected consumption (rising electrode signal) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
-| <NA> | 2.69 | 8.82 | 1 | 7.14 | NaN | 32.63 | 3.95 | DIAGNOSTIC ONLY: preliminary window 2.59-8.82 spans pulse 1 and three NH4 jumps; excluded by the M3 segmentation rule | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv |
+| sub_segment | fit_start_d | fit_end_d | governing_pulse | consumption_SENSITIVITY_linear_gain_mgN_L_d | held_fraction | o2_demand_SENSITIVITY_linear_gain_mgO2_L_d | kla_required_SENSITIVITY_linear_gain_per_d_SCENARIO_T25C | status | kla_measured_over_required_SENSITIVITY_linear_gain | role | nh4_observation_model | nh4_series |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1.1 | 2.625 | NaN | NaN | 0.5245 | NaN | NaN | not computed: no governing pulse (baseline) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 10 | 6.647 | 8.53 | NaN | NaN | 0 | NaN | NaN | not computed: no governing pulse (baseline) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 15 | 9.39 | 10.57 | 1 | 4.338 | 0 | 19.82 | 2.4 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 18 | 10.98 | 17.88 | 2 | 5.191 | 0.7074 | 23.72 | 2.872 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 19 | 17.98 | 24.59 | 2 | 1.549 | 0.5767 | 7.077 | 0.8568 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 21 | 24.76 | 32.39 | 3 | 1.435 | 0 | 6.556 | 0.7937 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 23 | 32.5 | 37.22 | 4 | 1.319 | 0 | 6.029 | 0.7299 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 24 | 37.32 | 44.66 | 4 | 1.261 | 0 | 5.763 | 0.6978 | computed | not computed: kLa_per_d missing | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| 25 | 44.76 | 47.92 | 4 | NaN | 0 | NaN | NaN | not computed: non-positive gain-corrected consumption (rising electrode signal) | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
+| <NA> | 2.69 | 8.82 | 1 | 7.14 | NaN | 32.63 | 3.95 | DIAGNOSTIC ONLY: preliminary window 2.59-8.82 spans pulse 1 and three NH4 jumps; excluded by the M3 segmentation rule | NaN | SENSITIVITY: linear electrode gain model (W1); the primary O2 demand comes from the M6 log observation model in nh4_truth_windows.csv | linear_gain_SENSITIVITY | electrode_reading |
 
 ## Balances
 
@@ -199,7 +197,7 @@ Rows labelled with a volume scenario other than the constant frame carry V(t) (W
 | coexistence affinity kJ/mol (documented SCENARIO) | 317 | 316.9 | 2 | 0.1051 | True |  |
 | HCO3- air-equilibrium mmol/L at pH 7.3 | 0.127 | 0.1268 | 0.001 | 0.000162 | True |  |
 | HCO3- air-equilibrium mmol/L at pH 7.8 | 0.401 | 0.4011 | 0.001 | 9.689e-05 | True |  |
-| O2 demand min mg O2/L/d (GAIN-CORRECTED) | 6 | 5.763 | 0.6 | 0.2366 | True | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
-| O2 demand max mg O2/L/d (GAIN-CORRECTED) | 33 | 77.53 | 3.3 | 44.53 | False | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
-| kLa required min 1/d | 0.7 | 0.6978 | 0.07 | 0.002248 | True | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
-| kLa required max 1/d | 4 | 9.386 | 0.4 | 5.386 | False | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
+| O2 demand min mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis) | 6 | 5.763 | 0.6 | 0.2366 | True | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
+| O2 demand max mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis) | 33 | 23.72 | 3.3 | 9.277 | False | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
+| kLa required min 1/d (SENSITIVITY: linear gain, as in the preliminary analysis) | 0.7 | 0.6978 | 0.07 | 0.002248 | True | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |
+| kLa required max 1/d (SENSITIVITY: linear gain, as in the preliminary analysis) | 4 | 2.872 | 0.4 | 1.128 | False | tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption |

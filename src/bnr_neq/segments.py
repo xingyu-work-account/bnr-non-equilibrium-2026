@@ -18,6 +18,7 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 from . import qc, thermo, volume
 from .config import Config
 from .constants import ANTHONISEN_EXP_K, KELVIN_OFFSET, NH3_PER_N
+from .model import RAW_READING, check_single_observation_model
 
 SEGMENT_START_D = 1.0  # start-up transient (day 0 to 1) excluded, plan item D10
 COMMON_END_D = 47.92
@@ -25,12 +26,15 @@ EXCLUDE_AFTER_BOUNDARY_D = 0.1
 MIN_FIT_SPAN_D = 0.25  # a slope needs at least 25 grid bins after the exclusion
 MIN_FIT_BINS = 25  # grid bins (0.01 d) lying wholly inside the fit window
 THEIL_SEN_ALPHA = 0.95
-# R8: a baseline window bounded on both sides by electrode steps (offset jumps or step candidates, not pulses or pulse
-# responses) and shorter than FRAGMENT_DELAYS x the longest delayed electrode response to a pulse (M2 lag of the
-# pulse-response jumps) cannot separate electrode relaxation from consumption; its slope is kept only as a diagnostic.
-# 3 delays: the usual settling span of a first-order transient (95 %). Fixed before inspecting any fragment slope.
+# R8: a window bounded on both sides by electrode steps (offset jumps, pulse-response jumps or step candidates; a pulse
+# or the record start/end is not an electrode step) and shorter than FRAGMENT_DELAYS x the longest delayed electrode
+# response to a pulse (M2 lag of the pulse-response jumps) cannot separate electrode relaxation from consumption; its
+# slope is kept only as a diagnostic. 3 delays: the usual settling span of a first-order transient (95 %). Fixed before
+# inspecting any fragment slope. Pass 3 (X6): extended symmetrically to windows governed by a pulse, because a delayed
+# pulse-response jump is a step of the electrode reading like an offset jump; decided from the boundary structure only.
 FRAGMENT_DELAYS = 3.0
-ELECTRODE_BOUNDARY_PREFIXES = ("jump (electrode_offset)", "candidate (")
+ELECTRODE_BOUNDARY_PREFIXES = ("jump (", "candidate (")
+FRAGMENT_STATUS = "not computed: electrode fragment"
 
 # Preliminary-analysis sub-segments (implementation_prompt.md, M3 item 6), used diagnostically.
 REFERENCE_WINDOWS = [(0.3, 2.59), (2.59, 8.82), (10.85, 17.84), (17.84, 24.60),
@@ -186,9 +190,10 @@ def electrode_delay_d(jumps: pd.DataFrame) -> float:
 
 
 def electrode_fragment(start_boundary: str, end_boundary: str, governing_pulse, span_d: float, delay_d: float) -> bool:
-    """R8: True for a baseline window between two electrode steps that is shorter than FRAGMENT_DELAYS delays."""
+    """R8: True for a window between two electrode steps that is shorter than FRAGMENT_DELAYS delays. Since pass 3 (X6)
+    the governing pulse does not matter (kept in the signature for the callers)."""
     both = all(str(b).startswith(ELECTRODE_BOUNDARY_PREFIXES) for b in (start_boundary, end_boundary))
-    return bool(pd.isna(governing_pulse) and both and np.isfinite(delay_d) and span_d < FRAGMENT_DELAYS * delay_d)
+    return bool(both and np.isfinite(delay_d) and span_d < FRAGMENT_DELAYS * delay_d)
 
 
 def slope_table(cfg: Config, grid: pd.DataFrame, jumps: pd.DataFrame, pulse_table: pd.DataFrame,
@@ -209,7 +214,7 @@ def slope_table(cfg: Config, grid: pd.DataFrame, jumps: pd.DataFrame, pulse_tabl
         if status == "computed" and electrode_fragment(s.start_boundary, s.end_boundary, s.governing_pulse,
                                                        s.fit_end_d - s.fit_start_d, delay):
             row["slope_fragment_diagnostic_mgNH4_L_d"] = theil_sen(b["t_mid_d"].to_numpy(), b["nh4_mgNH4_L"].to_numpy())[0]
-            status = row["status"] = (f"not computed: electrode fragment (baseline window between two electrode steps, "
+            status = row["status"] = (f"{FRAGMENT_STATUS} (window between two electrode steps, "
                                       f"fit span {s.fit_end_d - s.fit_start_d:.2f} d < {FRAGMENT_DELAYS:g} x the "
                                       f"longest delayed electrode response {delay:.2f} d; slope kept as a diagnostic)")
         span = s.fit_end_d - s.fit_start_d
@@ -257,18 +262,30 @@ def slope_table(cfg: Config, grid: pd.DataFrame, jumps: pd.DataFrame, pulse_tabl
         # GAIN-CORRECTED (electrode gain model): consumption = -slope / response fraction; only a positive
         # consumption is reported (as thermo.oxygen_table does), a rising signal is not a consumption rate
         ok = gain_status == "computed"
-        row["consumption_gain_corrected_mgN_L_d"] = -slope * n_factor / f if ok else np.nan
-        row["consumption_gain_corrected_ci95_low_mgN_L_d"] = -hi * n_factor / f if ok else np.nan
-        row["consumption_gain_corrected_ci95_high_mgN_L_d"] = -lo * n_factor / f if ok else np.nan
+        row[GAIN_COL] = -slope * n_factor / f if ok else np.nan
+        row[GAIN_LO] = -hi * n_factor / f if ok else np.nan
+        row[GAIN_HI] = -lo * n_factor / f if ok else np.nan
         row["gain_correction_status"] = gain_status
         rows.append(row)
     out = pd.DataFrame(rows)
     # W1 provenance: these electrode-scale columns are not the NH4 truth (see truth_slope_table)
     out["gain_corrected_role"] = GAIN_ROLE
     out["fa_basis"] = FA_READING_ROLE
+    # X3: every row is a window of the raw reading; its derived columns say SENSITIVITY in their names (checked)
+    out["nh4_observation_model"] = out["nh4_series"] = RAW_READING
+    check_single_observation_model(out, label_cols=(), independent_cols=SEGMENTS_NH4_INDEPENDENT)
     return out
 
 
+# X4: the SENSITIVITY label is part of every reading-based column name
+GAIN_COL = "consumption_SENSITIVITY_linear_gain_mgN_L_d"
+GAIN_LO = "consumption_SENSITIVITY_linear_gain_ci95_low_mgN_L_d"
+GAIN_HI = "consumption_SENSITIVITY_linear_gain_ci95_high_mgN_L_d"
+# X3: columns of segments.csv that rest on no NH4 quantity (window geometry, statuses, labels, pH, held spans)
+SEGMENTS_NH4_INDEPENDENT = ("sub_segment", "segment", "governing_pulse", "t_start_d", "t_end_d", "start_boundary",
+                            "end_boundary", "fit_start_d", "fit_end_d", "status", "n_bins", "held_overlap_d",
+                            "held_fraction", "median_pH", "slope_excl_held_status", "gain_correction_status",
+                            "gain_corrected_role", "fa_basis")
 GAIN_ROLE = ("SENSITIVITY: linear electrode gain model (consumption = −slope / response fraction); the single NH4 "
              "observation model is the M6 log model (nh4_truth_windows.csv)")
 FA_READING = "fa_median_SENSITIVITY_reading_as_TAN_mgNH3_L"  # W1: the SENSITIVITY label is part of the column name
@@ -321,6 +338,12 @@ def truth_slope_table(cfg: Config, truth: pd.DataFrame, table: pd.DataFrame,
             row[f"fa_median_mgNH3_L_SCENARIO_T{T:g}C"] = (float(np.median(thermo.free_ammonia_mgNH3_L(
                 c, b["pH"].to_numpy(), T + KELVIN_OFFSET))) if len(b) else np.nan)
         cons = lo = hi = band_lo = band_hi = np.nan
+        # R8 fragment (X6): the C(t) slope is kept only as a diagnostic, for the labelled R8 CASE of the pulse rates
+        frag = (theil_sen(b["t_d"].to_numpy(), c) if status.startswith(FRAGMENT_STATUS) and len(b) >= 2
+                else (np.nan, np.nan, np.nan))
+        row["consumption_fragment_diagnostic_mgN_L_d"] = -frag[0]
+        row["consumption_fragment_diagnostic_ci95_low_mgN_L_d"] = -frag[2]
+        row["consumption_fragment_diagnostic_ci95_high_mgN_L_d"] = -frag[1]
         if status == "computed":
             tt = b["t_d"].to_numpy()
             slope, s_lo, s_hi = theil_sen(tt, c)
@@ -637,8 +660,8 @@ def reference_comparison(table: pd.DataFrame, refwin: pd.DataFrame, ls: pd.DataF
     first_after = {k: comp[comp["governing_pulse"] == k].iloc[0] for k in (2, 4)}
     for k, ref in ((2, 5.2), (4, 1.4)):
         r = first_after[k]
-        rows.append({"quantity": f"consumption_gain_corrected_mgN_L_d after pulse {k}", "reference": ref,
-                     "obtained": r["consumption_gain_corrected_mgN_L_d"], "tolerance": 0.1 * ref,
+        rows.append({"quantity": f"{GAIN_COL} after pulse {k}", "reference": ref,
+                     "obtained": r[GAIN_COL], "tolerance": 0.1 * ref,
                      "note": f"sub-segment {r['sub_segment']} ({r['fit_start_d']:.3f} to {r['fit_end_d']:.3f} d); "
                              "tolerance: 10 % (reference says 'about')"})
     fa_cols = [c for c in table.columns if c.startswith(f"{FA_READING}_SCENARIO_")]
@@ -779,8 +802,7 @@ def write_report(cfg: Config, r: SegmentResult, path: Path) -> None:
     sens_view = sens.pivot_table(index=["series", "penalty_scale"], columns="beta", values="n_breaks").reset_index()
     sens_view.columns = [c if isinstance(c, str) else f"breaks_beta{c:g}" for c in sens_view.columns]
     gain = t[["sub_segment", "governing_pulse", "response_fraction_governing_pulse",
-              "consumption_gain_corrected_mgN_L_d", "consumption_gain_corrected_ci95_low_mgN_L_d",
-              "consumption_gain_corrected_ci95_high_mgN_L_d", "gain_correction_status"]]
+              GAIN_COL, GAIN_LO, GAIN_HI, "gain_correction_status"]]
     fa_cols = [c for c in t.columns if c.startswith(f"{FA_READING}_")]
     fa = t.loc[t["status"] == "computed", ["sub_segment", "t_start_d", "t_end_d", "median_pH", *fa_cols]]
     best = r.fits.loc[r.fits.groupby("segment")["aic"].idxmin(), ["segment", "model"]]

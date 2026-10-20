@@ -25,9 +25,14 @@ from .constants import (
     M_N_G_MOL,
     SECONDS_PER_DAY,
 )
+from .states import MIN_CLASSIFIED_FRACTION
 
 END_D = 47.92
 EXPLORATORY = "EXPLORATORY (n = 4 pulses)"
+# X2: idle-fraction metrics carry their nature in the name (states_fractions.csv columns in the comments)
+IDLE_LOWER = "idle_fraction_LOWER_BOUND"  # idle_fraction_lower_bound
+IDLE_UPPER = "idle_fraction_UPPER_BOUND"  # idle_fraction_upper_bound
+IDLE_CONDITIONAL = "idle_fraction_of_classified_time_CONDITIONAL"  # idle_fraction_of_classified_time
 
 INPUTS = {
     "segments": "outputs/tables/segments.csv",
@@ -132,6 +137,16 @@ def truth_windows(cfg: Config, inputs: dict) -> pd.DataFrame:
     return tw
 
 
+def eta_band_on_unit_interval(band: tuple[float, float]) -> tuple[tuple[float, float], str]:
+    """X5: η is a fraction of one pulse, so its band is clipped to [0, 1]; the unclipped band stays on the
+    removal_to_dose_ratio row. Returns the band and a note for the basis (empty when nothing was clipped)."""
+    lo, hi = band
+    if not (np.isfinite(lo) and np.isfinite(hi)) or (0.0 <= lo and hi <= 1.0):
+        return band, ""
+    return ((min(max(lo, 0.0), 1.0), min(max(hi, 0.0), 1.0)),
+            f" Param band clipped to [0, 1] (unclipped {lo:.3f} to {hi:.3f} on removal_to_dose_ratio).")
+
+
 def open_band_note(summary: pd.DataFrame | None) -> str:
     if summary is None:
         return ""
@@ -157,6 +172,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
     t_tr, c_tr = truth["t_d"].to_numpy(), truth["C_inv_mgN_L"].to_numpy()
     tid = str(truth["nh4_truth_id"].iloc[0])
     OBS, RAW, GAIN, IDENT = model.OBSERVATION_MODEL, model.RAW_READING, model.LINEAR_GAIN, model.IDENTITY
+    INDEP = model.NH4_INDEPENDENT
     state_series = f"M6_state:{selected}"
     c_start = float(np.median(c_tr[t_tr < t_tr[0] + PRE_WINDOW_D]))
     rows = []
@@ -203,15 +219,16 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                 nc(k, metric, "mg O2", "", "n_removed_mgN", no_removal, OBS, tid)
         g_rel = float(energy.gibbs_released_J(n_removed)) if removed_ok else np.nan
         for sae in saes:
-            sl = f"SAE{sae:g}"
-            sae_basis = f"SCENARIO field aeration efficiency {sae:g} kg O2/kWh ({sae_src})"
+            sl = f"AE{sae:g}"
+            sae_basis = (f"SCENARIO field (process-water) aeration efficiency AE {sae:g} kg O2/kWh at about 2 mg/L DO, "
+                         f"not the clean-water SAE ({sae_src})")
             if removed_ok and n_removed > 0:
                 e = float(energy.aeration_energy_kWh(o2, sae))
                 add(k, f"aeration_energy_demand_Wh_SCENARIO_{sl}", 1e3 * e, "Wh",
-                    f"o2_required / SAE (vessel scale); {sae_basis}", "o2_required_mgO2; config [scenarios]",
+                    f"o2_required / AE (vessel scale); {sae_basis}", "o2_required_mgO2; config [scenarios]",
                     obs=OBS, series=tid)
                 add(k, f"aeration_energy_demand_kWh_per_kgN_SCENARIO_{sl}", float(energy.specific_energy_kWh_per_kgN(e, n_removed)),
-                    "kWh/kg N", f"floor: 4.57 g O2/g N / SAE; {sae_basis}", "aeration_energy_demand; n_removed_mgN",
+                    "kWh/kg N", f"floor: 4.57 g O2/g N / AE; {sae_basis}", "aeration_energy_demand; n_removed_mgN",
                     obs=OBS, series=tid)
                 add(k, f"gibbs_to_aeration_energy_demand_SCENARIO_{sl}_T25C", g_rel / float(energy.kwh_to_J(e)), "-",
                     f"free energy released / demand-based aeration energy; {sae_basis}; ΔG°′ SCENARIO 25 °C",
@@ -228,7 +245,8 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             kla_basis = (f"SCENARIO kLa_O2 = {kla:g} 1/d (not measured); C* = {DO_SAT_25C_MG_L} mg/L (SCENARIO 25 °C); "
                          f"{do_txt}")
             add(k, f"o2_supply_capacity_mgO2_SCENARIO_{kl}_T25C", cap, "mg O2",
-                f"kLa (C* − C) V Δt over {tk:g}-{tn:g} d; {kla_basis}", "config [scenarios] kLa_O2_per_d, [vessel]")
+                f"kLa (C* − C) V Δt over {tk:g}-{tn:g} d; {kla_basis}", "config [scenarios] kLa_O2_per_d, [vessel]",
+                obs=INDEP)
             infeasible = removed_ok and o2 > cap
             infeasible_msg = (f"not computed: SCENARIO infeasible: O2 required exceeds the transfer capacity at kLa "
                               f"{kla:g} 1/d (required/capacity = {o2 / cap:.2f})" if infeasible else "")
@@ -242,7 +260,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             else:
                 nc(k, f"o2_utilization_SCENARIO_{kl}_T25C", "-", kla_basis, "o2_required_mgO2", no_removal, OBS, tid)
             for sae in saes:
-                sl = f"SAE{sae:g}"
+                sl = f"AE{sae:g}"
                 metric_e = f"aeration_energy_supply_kWh_per_kgN_SCENARIO_{sl}_{kl}_T25C"
                 metric_g = f"gibbs_to_aeration_energy_supply_SCENARIO_{sl}_{kl}_T25C"
                 if infeasible:
@@ -251,37 +269,82 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                 elif removed_ok and n_removed > 0:
                     e_sup = float(energy.aeration_energy_kWh(cap, sae))
                     add(k, metric_e, float(energy.specific_energy_kWh_per_kgN(e_sup, n_removed)), "kWh/kg N",
-                        f"supply capacity / SAE / N removed: includes aeration while idle; {kla_basis}; SCENARIO SAE "
-                        f"{sae:g} kg O2/kWh ({sae_src})", "o2_supply_capacity; n_removed_mgN", obs=OBS, series=tid)
+                        f"supply capacity / AE / N removed: includes aeration while idle; {kla_basis}; SCENARIO field AE "
+                        f"{sae:g} kg O2/kWh ({sae_src}). Inconsistent by construction: the capacity is at DO = 0 while "
+                        "the AE is defined at DO = 2 mg/L, so this is an upper bound", "o2_supply_capacity; n_removed_mgN",
+                        obs=OBS, series=tid)
                     add(k, metric_g, g_rel / float(energy.kwh_to_J(e_sup)), "-",
-                        f"free energy released / supply-based aeration energy; {kla_basis}; SCENARIO SAE {sae:g}",
+                        f"free energy released / supply-based aeration energy; {kla_basis}; SCENARIO field AE {sae:g}",
                         "free_energy_released_J_SCENARIO_T25C; o2_supply_capacity", obs=OBS, series=tid)
                 else:
                     for metric, unit in ((metric_e, "kWh/kg N"), (metric_g, "-")):
                         nc(k, metric, unit, kla_basis, "n_removed_mgN", no_removal if not removed_ok else
                            "not computed: no N removed", OBS, tid)
+        # X2: the idle fraction is a bounded quantity; every idle row states its coverage (classified fraction)
+        idle_metrics = ((IDLE_LOWER, "idle_fraction_lower_bound", "bounds_status",
+                         "LOWER_BOUND: inactive, over-supplied bins / all bins"),
+                        (IDLE_UPPER, "idle_fraction_upper_bound", "bounds_status",
+                         "UPPER_BOUND: (inactive + unclassified + artifact bins) / all bins"),
+                        (IDLE_CONDITIONAL, "idle_fraction_of_classified_time", "status",
+                         "CONDITIONAL on the classified bins being representative: inactive bins / classified bins"))
         if fractions is None:
-            for metric in ("idle_fraction_of_stirred_time", "idle_fraction_of_classified_time"):
+            for metric in (*(m for m, *_ in idle_metrics), "classified_fraction"):
                 nc(k, metric, "-", "W3 states", INPUTS["states_fractions"],
                    "not computed: states_fractions.csv missing (run the states stage)", OBS, tid)
         else:
             fr = fractions.set_index("interval").loc[f"pulse {k}"]
-            for metric, what in (("idle_fraction_of_stirred_time", "stirred"), ("idle_fraction_of_classified_time",
-                                                                                 "classified")):
-                if fr["status"] == "computed":
-                    add(k, metric, float(fr[metric]), "-",
-                        f"W3: time in the inactive, over-supplied state / {what} time over {tk:g}-{tn:g} d (states "
-                        "use the slope of the M6-inverted C(t))", INPUTS["states_fractions"], obs=OBS, series=tid)
+            cov = float(fr["classified_fraction"])
+            states_txt = f"over {tk:g}-{tn:g} d (states use the slope of the M6-inverted C(t))"
+            add(k, "classified_fraction", cov, "-", f"W3 coverage: bins with a process state / all bins {states_txt}",
+                INPUTS["states_fractions"], obs=OBS, series=tid)
+            for metric, col, status_col, what in idle_metrics:
+                basis = (f"W3 idle fraction, {what} {states_txt}; coverage: classified fraction {cov:.3f} "
+                         f"(conditional value needs ≥ {MIN_CLASSIFIED_FRACTION:g})")
+                if str(fr[status_col]).startswith("computed"):
+                    add(k, metric, float(fr[col]), "-", basis, INPUTS["states_fractions"], obs=OBS, series=tid)
                 else:
-                    nc(k, metric, "-", "W3 states", INPUTS["states_fractions"], str(fr["status"]), OBS, tid)
+                    nc(k, metric, "-", basis, INPUTS["states_fractions"], str(fr[status_col]), OBS, tid)
+
+    def r8_case(k, tw):
+        """X6: pulse k's consumption with the R8 electrode-fragment windows it governs (the primary rate excludes them)."""
+        gov = pd.to_numeric(tw["governing_pulse"], errors="coerce") == k
+        frag = tw[gov & tw["status"].astype(str).str.startswith(S.FRAGMENT_STATUS)]
+        metric = "consumption_weighted_mgN_L_d_R8_CASE_incl_fragments"
+        if len(frag) == 0:
+            nc(k, metric, "mg N/L/d", "R8 CASE", INPUTS["truth_windows"],
+               "not computed: no electrode-fragment window governed by this pulse (the primary rate is the whole case)",
+               OBS, tid)
+            return
+        cols = ["sub_segment", "fit_start_d", "fit_end_d", "held_fraction", "consumption_mgN_L_d",
+                "consumption_ci95_low_mgN_L_d", "consumption_ci95_high_mgN_L_d"]
+        parts = pd.concat([tw.loc[gov & (tw["status"] == "computed"), cols], frag.assign(
+            consumption_mgN_L_d=frag["consumption_fragment_diagnostic_mgN_L_d"],
+            consumption_ci95_low_mgN_L_d=frag["consumption_fragment_diagnostic_ci95_low_mgN_L_d"],
+            consumption_ci95_high_mgN_L_d=frag["consumption_fragment_diagnostic_ci95_high_mgN_L_d"])[cols]])
+        parts = parts[parts["consumption_mgN_L_d"] > 0].assign(duration_d=lambda d: d["fit_end_d"] - d["fit_start_d"])
+        frag_txt = ", ".join(f"{int(r.sub_segment)} ({r.fit_start_d:.3f}-{r.fit_end_d:.3f} d, "
+                             f"{r.consumption_fragment_diagnostic_mgN_L_d:.2f} mg N/L/d)" for r in frag.itertuples(index=False))
+        basis = ("R8 CASE (not the primary rate): duration-weighted consumption of the M6-inverted C(t) over the computed "
+                 f"slope windows plus the electrode-fragment window(s) {frag_txt} demoted by R8; the primary "
+                 "consumption_weighted_mgN_L_d excludes them; interval = duration-weighted Theil-Sen bounds, as for "
+                 "the primary rate")
+        src = (f"{INPUTS['truth_windows']} (sub-segments {', '.join(str(int(x)) for x in sorted(parts['sub_segment']))}); "
+               f"{truth_src}")
+        if len(parts) == 0:
+            nc(k, metric, "mg N/L/d", basis, src, "not computed: no positive consumption in any window", OBS, tid)
+        else:
+            v, lo, hi, hf = weighted_rate(parts, "consumption_mgN_L_d", "consumption_ci95_low_mgN_L_d",
+                                          "consumption_ci95_high_mgN_L_d")
+            add(k, metric, v, "mg N/L/d", basis, src, ci=(lo, hi), held=hf, obs=OBS, series=tid)
 
     t_ph, ph_s = alkalinity.smoothed_ph(grid)
     pco2 = float(cfg.get("scenarios.pCO2_air_atm"))
     truth_src = f"{INPUTS['truth']} ({tid})"
     for k, (tk, tn) in enumerate(itertools.pairwise(times), start=1):
         st = steps.set_index("pulse").loc[k]
-        add(k, "t_pulse_d", tk, "d", "experimental fact", "config/experiment.toml [pulses] times_d")
-        add(k, "segment_end_d", tn, "d", "next pulse or end of common window", "config; common window 47.92 d")
+        add(k, "t_pulse_d", tk, "d", "experimental fact", "config/experiment.toml [pulses] times_d", obs=INDEP)
+        add(k, "segment_end_d", tn, "d", "next pulse or end of common window", "config; common window 47.92 d",
+            obs=INDEP)
         # --- affinity step: primary from C(t) just before the pulse; reading-as-TAN as SENSITIVITY
         c_pre = pre_median(t_tr, c_tr, tk)
         c_pre_b = [pre_median(t_tr, b, tk) for b in bands]
@@ -303,11 +366,12 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         if len(w) == 0:
             for metric in ("consumption_uncorrected_first_window_mgN_L_d", "consumption_uncorrected_weighted_mgN_L_d"):
                 nc(k, metric, "mg N/L/d", "", INPUTS["segments"], "not computed: no slope window after the pulse", RAW, RAW)
-            for metric in ("consumption_gain_corrected_first_window_mgN_L_d", "consumption_gain_corrected_weighted_mgN_L_d"):
+            for metric in ("consumption_SENSITIVITY_linear_gain_first_window_mgN_L_d", "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"):
                 nc(k, metric, "mg N/L/d", "SENSITIVITY", INPUTS["segments"], "not computed: no slope window after the pulse",
                    GAIN, RAW)
             for metric in ("consumption_first_window_mgN_L_d", "consumption_weighted_mgN_L_d"):
                 nc(k, metric, "mg N/L/d", "", truth_src, "not computed: no slope window after the pulse", OBS, tid)
+            r8_case(k, tw)
         else:
             first = w.iloc[0]
             pos = positive_windows(w)
@@ -325,20 +389,20 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             # SENSITIVITY: linear gain model
             gain_basis = "SENSITIVITY: GAIN-CORRECTED (linear electrode gain model, S1)"
             if first["gain_correction_status"] == "computed":
-                add(k, "consumption_gain_corrected_first_window_mgN_L_d",
-                    float(first["consumption_gain_corrected_mgN_L_d"]), "mg N/L/d", gain_basis,
+                add(k, "consumption_SENSITIVITY_linear_gain_first_window_mgN_L_d",
+                    float(first[S.GAIN_COL]), "mg N/L/d", gain_basis,
                     f"{first_src}; {INPUTS['pulses']}",
-                    ci=(float(first["consumption_gain_corrected_ci95_low_mgN_L_d"]),
-                        float(first["consumption_gain_corrected_ci95_high_mgN_L_d"])), held=float(first["held_fraction"]),
+                    ci=(float(first[S.GAIN_LO]),
+                        float(first[S.GAIN_HI])), held=float(first["held_fraction"]),
                     obs=GAIN, series=RAW)
             else:
-                nc(k, "consumption_gain_corrected_first_window_mgN_L_d", "mg N/L/d", gain_basis, first_src,
+                nc(k, "consumption_SENSITIVITY_linear_gain_first_window_mgN_L_d", "mg N/L/d", gain_basis, first_src,
                    str(first["gain_correction_status"]), GAIN, RAW, held=float(first["held_fraction"]))
             gain_w = np.nan
             if len(pos) == 0:
                 nc(k, "consumption_uncorrected_weighted_mgN_L_d", "mg N/L/d", "duration-weighted over slope windows",
                    INPUTS["segments"], "not computed: non-positive gain-corrected consumption in every slope window", RAW, RAW)
-                nc(k, "consumption_gain_corrected_weighted_mgN_L_d", "mg N/L/d", gain_basis + "; duration-weighted",
+                nc(k, "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d", "mg N/L/d", gain_basis + "; duration-weighted",
                    INPUTS["segments"], "not computed: non-positive gain-corrected consumption in every slope window",
                    GAIN, RAW)
             else:
@@ -347,10 +411,8 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                 add(k, "consumption_uncorrected_weighted_mgN_L_d", v, "mg N/L/d",
                     "measured (electrode reading, uncorrected); duration-weighted over slope windows with positive "
                     "gain-corrected consumption" + excl_note, src, ci=(lo, hi), held=hf, obs=RAW, series=RAW)
-                gain_w, glo, ghi, ghf = weighted_rate(pos, "consumption_gain_corrected_mgN_L_d",
-                                                      "consumption_gain_corrected_ci95_low_mgN_L_d",
-                                                      "consumption_gain_corrected_ci95_high_mgN_L_d")
-                add(k, "consumption_gain_corrected_weighted_mgN_L_d", gain_w, "mg N/L/d",
+                gain_w, glo, ghi, ghf = weighted_rate(pos, S.GAIN_COL, S.GAIN_LO, S.GAIN_HI)
+                add(k, "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d", gain_w, "mg N/L/d",
                     gain_basis + "; duration-weighted over slope windows with positive consumption" + excl_note,
                     f"{src}; {INPUTS['pulses']}", ci=(glo, ghi), held=ghf, obs=GAIN, series=RAW)
             # --- primary: the M6-inverted C(t) on the same windows
@@ -393,11 +455,14 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                         "interval = the constant-volume interval shifted by the C E/V term", t_src, ci=(lo + shift, hi + shift),
                         held=hf, obs=OBS, series=tid)
 
+            r8_case(k, tw)
+
             mask = np.zeros(len(grid), dtype=bool)
             for r in w.itertuples(index=False):
                 mask |= (grid["t_start_d"] >= r.fit_start_d - 1e-9).to_numpy() & (grid["t_end_d"] <= r.fit_end_d + 1e-9).to_numpy()
             gsel = grid[mask]
-            add(k, "median_pH", float(gsel["pH"].median()), "pH", "measured", f"{INPUTS['grid']} over the slope windows")
+            add(k, "median_pH", float(gsel["pH"].median()), "pH", "measured", f"{INPUTS['grid']} over the slope windows",
+                obs=INDEP)
             tmask = np.zeros(len(truth), dtype=bool)
             for r in w.itertuples(index=False):
                 tmask |= truth.index.isin(S.truth_bins(truth, r.fit_start_d, r.fit_end_d).index)
@@ -441,7 +506,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             if gain_w > 0:
                 gd = float(thermo.oxygen_demand_mgO2_L_d(gain_w))
                 add(k, "o2_demand_SENSITIVITY_linear_gain_mgO2_L_d", gd, "mg O2/L/d",
-                    "SENSITIVITY: GAIN-CORRECTED; 4.57 g O2/g N", "consumption_gain_corrected_weighted_mgN_L_d",
+                    "SENSITIVITY: GAIN-CORRECTED; 4.57 g O2/g N", "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d",
                     ci=(float(thermo.oxygen_demand_mgO2_L_d(max(glo, 0.0))), float(thermo.oxygen_demand_mgO2_L_d(max(ghi, 0.0)))),
                     held=ghf, obs=GAIN, series=RAW)
                 add(k, "kla_required_SENSITIVITY_linear_gain_per_d_SCENARIO_T25C", float(thermo.required_kla_per_d(gd)),
@@ -452,7 +517,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             else:
                 for metric, unit in (("o2_demand_SENSITIVITY_linear_gain_mgO2_L_d", "mg O2/L/d"),
                                      ("kla_required_SENSITIVITY_linear_gain_per_d_SCENARIO_T25C", "1/d")):
-                    nc(k, metric, unit, "SENSITIVITY: GAIN-CORRECTED", "consumption_gain_corrected_weighted_mgN_L_d",
+                    nc(k, metric, unit, "SENSITIVITY: GAIN-CORRECTED", "consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d",
                        "not computed: non-positive gain-corrected consumption (rising electrode signal)", GAIN, RAW)
             add(k, "o2_windows_computed", len(tpos), "count", "slope windows with positive M6-inverted consumption",
                 INPUTS["truth_windows"], obs=OBS, series=tid)
@@ -460,15 +525,14 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         # post-pulse rate, against the time to the next pulse
         if rate_w > 0:
             tau = dose.n_mg_L / rate_w
-            add(k, "relaxation_time_d", tau, "d", "dose / duration-weighted consumption of the M6-inverted C(t): time to "
-                f"remove one pulse at the post-pulse rate.{band_txt}", "consumption_weighted_mgN_L_d; dose",
-                obs=OBS, series=tid)
-            add(k, "relaxation_time_over_pulse_interval", tau / (tn - tk), "-",
-                "relaxation_time_d / time to the next pulse (> 1: the next pulse arrives before the previous one is "
-                "removed, the batch is driven further from its inactive reference)", "relaxation_time_d; config",
-                obs=OBS, series=tid)
+            add(k, "dose_removal_time_d", tau, "d", "dose / duration-weighted consumption of the M6-inverted C(t): time to "
+                "remove one pulse at the post-pulse rate (a ratio of two observed quantities, not a fitted relaxation "
+                f"constant).{band_txt}", "consumption_weighted_mgN_L_d; dose", obs=OBS, series=tid)
+            add(k, "dose_removal_time_over_pulse_interval", tau / (tn - tk), "-",
+                "dose_removal_time_d / time to the next pulse (> 1: the next pulse arrives before the previous one could "
+                "be removed at the post-pulse rate)", "dose_removal_time_d; config", obs=OBS, series=tid)
         else:
-            for metric, unit in (("relaxation_time_d", "d"), ("relaxation_time_over_pulse_interval", "-")):
+            for metric, unit in (("dose_removal_time_d", "d"), ("dose_removal_time_over_pulse_interval", "-")):
                 nc(k, metric, unit, "M6 log observation model", "consumption_weighted_mgN_L_d",
                    "not computed: no positive consumption of the M6-inverted NH4 after this pulse", OBS, tid)
 
@@ -502,7 +566,9 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
             add(k, f"removal_to_dose_ratio{sfx}", r_, "-", basis_ + " Removal of TAN between the pulses per dose; > 1 "
                 "when carry-over TAN is removed as well.", src_, obs=OBS, series=tid, band=band)
             if r_ <= 1:
-                add(k, f"eta_conversion_fraction{sfx}", r_, "-", basis_, src_, obs=OBS, series=tid, band=band)
+                eta_band, eta_note = eta_band_on_unit_interval(band)
+                add(k, f"eta_conversion_fraction{sfx}", r_, "-", basis_ + eta_note, src_, obs=OBS, series=tid,
+                    band=eta_band)
             else:
                 nc(k, f"eta_conversion_fraction{sfx}", "-", basis_, src_,
                    f"not computed: removal exceeds the dose (ratio {r_:.3f}): carry-over TAN was removed as well, so a "
@@ -542,12 +608,25 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         else:
             nc(k, "eta_conversion_fraction_MODEL_BASED", "-", mb_basis, mb_src,
                f"not computed: MODEL-BASED removal/dose {integral / dose.n_mg_L:.3f} outside [0, 1]", OBS, state_series)
+        # X7 (e): the model state obeys C_model(next) = C_model(before) + dose − ∫r dt, so the dose-anchored ratio minus
+        # the MODEL-BASED η is the decline over the interval of the misfit C_inv − C_model, divided by the dose
+        t_st, c_st = state["t_d"].to_numpy(), state["model_state_C_mgN_L_conditional_on_C0"].to_numpy()
+
+        def at_(t_, c_, x):
+            return pre_median(t_, c_, x) if x < END_D else float(np.median(c_[t_ >= END_D - PRE_WINDOW_D]))
+        mis_pre, mis_next = c_pre - at_(t_st, c_st, tk), c_next - at_(t_st, c_st, tn)
+        add(k, "eta_gap_inversion_misfit_MODEL_BASED", (mis_pre - mis_next) / dose.n_mg_L, "-",
+            f"MODEL-BASED decomposition: [(C_inv − C_model) before the pulse ({mis_pre:.1f} mg N/L) − (C_inv − C_model) "
+            f"before the next ({mis_next:.1f} mg N/L)] / dose. Because the model state obeys its own mass balance, this "
+            "equals removal_to_dose_ratio − eta_conversion_fraction_MODEL_BASED up to the 0.1 d medians: the part of the "
+            "dose-anchored removal that the rate law does not reproduce",
+            f"{truth_src}; {INPUTS['model']}", obs=OBS, series=state_series)
         add(k, "mean_consumption_rate_MODEL_BASED_mgN_L_d", mean_r, "mg N/L/d",
             f"MODEL-BASED ({selected}); no interval (joint parameter uncertainty not propagated)", INPUTS["model"],
             obs=OBS, series=state_series)
         add(k, "free_energy_per_fully_converted_pulse_J_SCENARIO_T25C", g0, "J",
             "SCENARIO 25 °C: standard conditions (ΔG°′ = −348.8 kJ/mol N at pH 7 and 25 °C)",
-            "config [pulses], [vessel]; constants")
+            "config [pulses], [vessel]; constants", obs=INDEP)
         add(k, "free_energy_released_MODEL_BASED_J_SCENARIO_T25C", integral / dose.n_mg_L * g0, "J",
             "MODEL-BASED η x standard-condition free energy (SCENARIO 25 °C)", "eta_conversion_fraction_MODEL_BASED; free energy per pulse",
             obs=OBS, series=state_series)
@@ -557,12 +636,13 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         if stirrer_w is None:
             for metric, unit in (("specific_stirring_energy_J_per_gN", "J/g N"),
                                  ("free_energy_to_stirrer_energy_ratio", "-")):
-                add(k, metric, np.nan, unit, "", "stirrer_power_W (config [missing])", stirrer_status)
+                nc(k, metric, unit, "LABORATORY-SPECIFIC; MODEL-BASED", "stirrer_power_W (config [missing])",
+                   stirrer_status, OBS, state_series)
         else:
             energy_j = stirrer_energy_J(stirrer_w, tk, tn)
             g_n = integral * cfg.get("vessel.volume_L") / 1e3  # mg N/L x L -> g N
             add(k, "stirrer_energy_J", energy_j, "J", "LABORATORY-SPECIFIC: measured power x segment duration",
-                "config [measurements] stirrer_power_W; segment duration")
+                "config [measurements] stirrer_power_W; segment duration", obs=INDEP)
             if g_n > 0:
                 add(k, "specific_stirring_energy_J_per_gN", energy_j / g_n, "J/g N",
                     "LABORATORY-SPECIFIC: stirrer energy / MODEL-BASED nitrogen converted", "stirrer_energy_J; eta_conversion_fraction_MODEL_BASED; vessel volume",
@@ -676,8 +756,10 @@ def pulse_checkpoints(k: int, n_pulses: int) -> tuple[str, str]:
 
 
 def pulse_qualifier(consistency: pd.DataFrame, k: int, n_pulses: int) -> str:
+    """Qualifier of pulse k from the checkpoints bounding its interval; k = 0 is the interval before the first pulse
+    (baseline windows), bounded by checkpoint pre_pulse1 (X5)."""
     c = consistency.set_index("checkpoint")
-    pts = [x for x in pulse_checkpoints(k, n_pulses) if x in c.index]
+    pts = [x for x in (("pre_pulse1",) if k == 0 else pulse_checkpoints(k, n_pulses)) if x in c.index]
     bad = [x for x in pts if not bool(c.loc[x, "consistent_at_best_fit"])]
     if bad:
         return f"{c.loc[bad[0], 'verdict']} (checkpoint {bad[0]}; nh4_truth_w2_consistency.csv)"
@@ -688,8 +770,9 @@ def qualify(df: pd.DataFrame, consistency: pd.DataFrame, n_pulses: int, pulse_co
     """Add ``w2_bound_check`` to every row derived from the M6 observation model (the qualifier of its pulse)."""
     out = df.copy()
     out["w2_bound_check"] = ""
-    for k in range(1, n_pulses + 1):
-        m = (pd.to_numeric(out[pulse_col], errors="coerce") == k) & (out[model_col] == model.OBSERVATION_MODEL)
+    pulse = pd.to_numeric(out[pulse_col], errors="coerce").fillna(0)  # no governing pulse: before pulse 1
+    for k in range(n_pulses + 1):
+        m = (pulse == k) & (out[model_col] == model.OBSERVATION_MODEL)
         out.loc[m, "w2_bound_check"] = pulse_qualifier(consistency, k, n_pulses)
     return out
 
@@ -699,9 +782,10 @@ def check_w2_qualified(df: pd.DataFrame, consistency: pd.DataFrame, n_pulses: in
     """Raise unless every M6-derived row of a pulse whose C(t) contradicts the W2 bound carries the QUALIFIED label."""
     if "w2_bound_check" not in df.columns:
         raise BoundContradictionError("no w2_bound_check column")
-    for k in range(1, n_pulses + 1):
+    pulse = pd.to_numeric(df[pulse_col], errors="coerce").fillna(0)
+    for k in range(n_pulses + 1):
         if pulse_qualifier(consistency, k, n_pulses).startswith(QUALIFIED):
-            m = (pd.to_numeric(df[pulse_col], errors="coerce") == k) & (df[model_col] == model.OBSERVATION_MODEL)
+            m = (pulse == k) & (df[model_col] == model.OBSERVATION_MODEL)
             if not df.loc[m, "w2_bound_check"].astype(str).str.startswith(QUALIFIED).all():
                 raise BoundContradictionError(f"pulse {k}: C(t)-derived rows not qualified against the W2 bound")
 
@@ -807,6 +891,8 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     tw = qualify(tw, cons, n, "governing_pulse", "nh4_observation_model")
     check_w2_qualified(m, cons, n)
     check_w2_qualified(tw, cons, n, "governing_pulse")
+    model.check_single_observation_model(m)  # X3: the qualified tables are checked again right before they are written
+    model.check_single_observation_model(tw, label_cols=("status", "w2_bound_check"), series_col="nh4_truth_id")
     return PulseResult(m, associations(m), tw, bal, cons, volume_constraints(cfg, inputs))
 
 
@@ -837,7 +923,7 @@ def figure(cfg: Config, r: PulseResult, png: Path, svg: Path) -> None:
         v = w[col].to_numpy(dtype=float)
         err = np.vstack([v - lo[col].to_numpy(dtype=float), hi[col].to_numpy(dtype=float) - v])
         ax.bar(x + off, v, 0.38, color=color, label=lab, yerr=err, error_kw={"ecolor": INK2, "capsize": 3, "lw": 0.8})
-    ax.scatter(x + 0.2, w["consumption_gain_corrected_weighted_mgN_L_d"], marker="_", s=160, color=INK, zorder=3,
+    ax.scatter(x + 0.2, w["consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"], marker="_", s=160, color=INK, zorder=3,
                label="SENSITIVITY: linear gain correction")
     ax.axhline(0, color=INK2, lw=0.8)
     ax.set_xticks(x, labels)
@@ -967,9 +1053,19 @@ def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
         ("Per pulse: N removed, O2 required (4.57 g O2/g N; 3.43 as a nitritation case), O2 transfer capacity "
          "kLa (C* − DO) V Δt per kLa_O2 SCENARIO (DO = 0 while not measured), utilization = required/capacity "
          "(a scenario whose capacity is below the requirement is `not computed: SCENARIO infeasible`), aeration-equivalent "
-         "energy = O2/SAE per field-SAE SCENARIO (demand-based floor and supply-based value, in kWh/kg N), the free "
-         "energy released over that energy, the W3 idle fraction, and the relaxation time (dose / post-pulse rate) "
-         "against the pulse interval. The stirrer terms are LABORATORY-SPECIFIC."),
+         "energy = O2/AE per field-AE SCENARIO (demand-based floor and supply-based value, in kWh/kg N), the free "
+         "energy released over that energy, the W3 idle fraction as bounds (LOWER_BOUND: inactive bins over all bins; "
+         "UPPER_BOUND: inactive, unclassified and artifact bins over all bins) with its coverage (`classified_fraction`) "
+         "and, only where the coverage is at least one half, the CONDITIONAL value over classified time, and the "
+         "dose-removal time (dose / post-pulse rate, not a fitted relaxation constant) against the pulse interval. "
+         "The supply-based energy divides a transfer capacity at DO = 0 by a field AE defined at DO = 2 mg/L. The "
+         "stirrer terms are LABORATORY-SPECIFIC."),
+        "",
+        ("R8 CASE: a slope window between two electrode steps shorter than 3 x the longest delayed electrode response is "
+         "an electrode fragment, also after a pulse (pass 3); `consumption_weighted_mgN_L_d_R8_CASE_incl_fragments` "
+         "repeats the duration-weighted consumption with the fragment windows of the pulse included, beside the primary "
+         "rate without them. `eta_gap_inversion_misfit_MODEL_BASED` decomposes the difference between the "
+         "dose-anchored removal per dose and the MODEL-BASED η."),
         "",
         "## The inverted C(t) against the W2 bound (S2)",
         "",

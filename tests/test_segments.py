@@ -110,11 +110,11 @@ def test_negative_consumption_not_computed(cfg):
     r = tab[(tab["governing_pulse"] == 1) & (tab["status"] == "computed")].iloc[0]
     assert r["slope_mgNH4_L_d"] > 0
     assert r["gain_correction_status"] == S.NON_POSITIVE and r["gain_correction_status"].startswith("not computed: non-positive")
-    assert np.isnan(r["consumption_gain_corrected_mgN_L_d"]) and np.isnan(r["consumption_gain_corrected_ci95_low_mgN_L_d"])
+    assert np.isnan(r["consumption_SENSITIVITY_linear_gain_mgN_L_d"]) and np.isnan(r["consumption_SENSITIVITY_linear_gain_ci95_low_mgN_L_d"])
     falling = S.slope_table(cfg, _synthetic_grid(p1 - 1.0, p1 + 1.5, lambda t: 40.0 - 2.0 * (t - p1)), NO_JUMPS, pt, NO_HELD)
     f = falling[(falling["governing_pulse"] == 1) & (falling["status"] == "computed")].iloc[0]
     assert f["gain_correction_status"] == "computed"
-    assert f["consumption_gain_corrected_mgN_L_d"] == pytest.approx(2.0 * 0.77649 / 0.37, rel=1e-6)
+    assert f["consumption_SENSITIVITY_linear_gain_mgN_L_d"] == pytest.approx(2.0 * 0.77649 / 0.37, rel=1e-6)
 
 
 def test_held_span_flagged_and_excluded_in_sensitivity(cfg):
@@ -173,7 +173,7 @@ def test_pelt_sensitivity_reported(segmented):
 def test_baseline_gain_correction_not_computed(segmented):
     base = segmented.table[segmented.table["segment"] == 0]
     assert (base["gain_correction_status"] == "not computed: no governing pulse (baseline)").all()
-    assert base["consumption_gain_corrected_mgN_L_d"].isna().all()
+    assert base["consumption_SENSITIVITY_linear_gain_mgN_L_d"].isna().all()
 
 
 def test_scenario_labels(segmented):

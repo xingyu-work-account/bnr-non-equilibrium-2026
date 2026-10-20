@@ -2,7 +2,8 @@
 
 Fig. 1: the linkage sensors -> process state -> rates -> O2 demand -> energy -> efficiency, with each link's basis.
 Fig. 4: the W2 bound N_nit(Alk0) against the removal implied by C(t); rate against free ammonia (W1); state timeline (W3).
-Fig. 8: per-pulse conversion, oxygen utilization, idle fraction and aeration energy under the SAE and kLa SCENARIOS.
+Fig. 8: per-pulse conversion, oxygen utilization, idle-fraction bounds with coverage and aeration energy under the
+field-AE and kLa SCENARIOS.
 
 Palette: the project's fixed categorical order (validated: CVD ΔE ≥ 9 for adjacent pairs; aqua is below 3:1 contrast on
 the surface, so every series is also named in a legend or direct label, and the report carries the tables).
@@ -55,13 +56,14 @@ def fig1(t: dict[str, pd.DataFrame], d: Path, saes: list[float]) -> None:
         ("Sensors", (f"pH: {v['ph'].split(' (')[0]}\nNH4: {v['nh4'].split(':')[0]} (under-response)\n"
                      f"ORP: {v['orp'].split(':')[0]} (absolute);\nrelative ORP used\nEC: {v['ec'].split(':')[0]}"), BLUE),
         ("NH4 truth C(t)", "M6 log observation\nmodel, inverted\n(level not identifiable)", VIOLET),
-        ("Process state", (f"rules on ORP_rel, pH\nand C(t) slopes:\n{100 * fr['classified_fraction']:.0f} % classified,\n"
-                           f"idle {100 * fr['idle_fraction_of_stirred_time']:.0f} % of\nstirred time"), BLUE),
+        ("Process state", (f"rules on ORP_rel, pH\nand C(t) slopes:\n{100 * fr['classified_fraction']:.0f} % classified;\n"
+                           f"idle {100 * fr['idle_fraction_lower_bound']:.0f}-{100 * fr['idle_fraction_upper_bound']:.0f} % "
+                           "of\nstirred time (bounds)"), BLUE),
         ("Rates", "−dC/dt per slope window,\nremoval per pulse, η", VIOLET),
         ("O2 demand", "4.57 g O2/g N\n(3.43 nitritation case)", VIOLET),
         ("Energy", f"O2 / field AE\n(SCENARIO {min(saes):g}-{max(saes):g}\nkg O2/kWh);\nsupply kLa (C*−C) V\n(SCENARIO kLa)",
          ORANGE),
-        ("Efficiency", "η, O2 utilization,\nidle fraction,\nkWh/kg N,\nΔG released / energy", ORANGE),
+        ("Efficiency", "η, O2 utilization,\nidle-fraction bounds,\nkWh/kg N,\nΔG released / energy", ORANGE),
     ]
     fig, ax = plt.subplots(figsize=(15, 5.2), facecolor=SURFACE)
     ax.set_facecolor(SURFACE)
@@ -195,7 +197,9 @@ def fig8(t: dict[str, pd.DataFrame], d: Path) -> None:
     ax.set_xticks(x, labels)
     ax.set_ylabel("Fraction of the pulse removed before the next one", fontsize=8.5, color=INK)
     ax.set_ylim(0, 1.55)
-    ax.set_title("a  Conversion η per pulse (W1 C(t); P2-P4 QUALIFIED by W2)", loc="left", fontsize=10, color=INK)
+    qual = sorted({int(k) for k, q in zip(pm["pulse"], pm["w2_bound_check"].fillna("").astype(str)) if q.startswith("QUALIFIED")})
+    ax.set_title("a  Conversion η per pulse (W1 C(t)" + (f"; {', '.join(f'P{k}' for k in qual)} QUALIFIED by W2)"
+                                                        if qual else ")"), loc="left", fontsize=10, color=INK)
     ax.legend(fontsize=7, frameon=False, loc="upper left", ncol=2)
 
     ax = axes[0, 1]
@@ -218,37 +222,48 @@ def fig8(t: dict[str, pd.DataFrame], d: Path) -> None:
     ax.legend(fontsize=7, frameon=False, loc="lower left")
 
     ax = axes[1, 0]
-    for off, metric, color, lab in ((-0.17, "idle_fraction_of_stirred_time", ORANGE, "of stirred time"),
-                                    (0.17, "idle_fraction_of_classified_time", BLUE, "of classified time")):
-        v = _metric(pm, metric).reindex(pulses).to_numpy(dtype=float)
-        ax.bar(x + off, np.nan_to_num(v), 0.32, color=color, label=f"inactive, over-supplied, {lab}")
+    lo_i = _metric(pm, "idle_fraction_LOWER_BOUND").reindex(pulses).to_numpy(dtype=float)
+    hi_i = _metric(pm, "idle_fraction_UPPER_BOUND").reindex(pulses).to_numpy(dtype=float)
+    cov = _metric(pm, "classified_fraction").reindex(pulses).to_numpy(dtype=float)
+    cond = _metric(pm, "idle_fraction_of_classified_time_CONDITIONAL").reindex(pulses).to_numpy(dtype=float)
+    ax.bar(x, np.nan_to_num(hi_i - lo_i), 0.42, bottom=np.nan_to_num(lo_i), color=ORANGE, alpha=0.35,
+           label="idle fraction: between the lower and upper bound")
+    ax.hlines(lo_i, x - 0.21, x + 0.21, color=ORANGE, lw=2, label="lower bound (inactive bins / all bins)")
+    ax.plot(x, cond, "D", ms=6, color=BLUE, ls="none", label="CONDITIONAL, over classified time (coverage ≥ 0.5)")
+    for xi, c, h in zip(x, cov, hi_i):
+        ax.text(xi, min(np.nan_to_num(h) + 0.03, 1.02), f"coverage\n{c:.2f}", ha="center", va="bottom", fontsize=7,
+                color=INK2)
     ax.set_xticks(x, labels)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Idle fraction (W3 states)", fontsize=8.5, color=INK)
-    ax.set_title("c  Time stirred without conversion", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7, frameon=False, loc="upper left")
+    ax.set_ylim(0, 1.6)
+    ax.set_yticks(np.arange(0, 1.01, 0.2))
+    ax.set_ylabel("Idle fraction of stirred time (W3 states)", fontsize=8.5, color=INK)
+    ax.set_title("c  Time stirred without conversion: bounds, not a value", loc="left", fontsize=10, color=INK)
+    ax.legend(fontsize=7, frameon=False, loc="upper center", ncol=2)
 
     ax = axes[1, 1]
-    saes = sorted({float(m.split("_SAE")[1].split("_")[0]) for m in pm["metric"]
-                   if m.startswith("aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE")})
+    saes = sorted({float(m.split("_AE")[1].split("_")[0]) for m in pm["metric"]
+                   if m.startswith("aeration_energy_supply_kWh_per_kgN_SCENARIO_AE")})
     mid = saes[len(saes) // 2]
     for j, (kla, color) in enumerate(zip(klas, (BLUE, AQUA, VIOLET))):
-        vals = {s: _metric(pm, f"aeration_energy_supply_kWh_per_kgN_SCENARIO_SAE{s:g}_kLa{kla:g}_T25C").reindex(pulses)
+        vals = {s: _metric(pm, f"aeration_energy_supply_kWh_per_kgN_SCENARIO_AE{s:g}_kLa{kla:g}_T25C").reindex(pulses)
                 .to_numpy(dtype=float) for s in saes}
         xx = x + (j - 1) * 0.26
-        ax.bar(xx, np.nan_to_num(vals[mid]), 0.24, color=color, label=f"supply-based, kLa {kla:g} 1/d, SAE {mid:g}")
+        ax.bar(xx, np.nan_to_num(vals[mid]), 0.24, color=color, label=f"supply-based, kLa {kla:g} 1/d, AE {mid:g}")
         ax.vlines(xx, vals[max(saes)], vals[min(saes)], color=INK, lw=1)
-    floor = _metric(pm, f"aeration_energy_demand_kWh_per_kgN_SCENARIO_SAE{mid:g}").dropna()
+    floor = _metric(pm, f"aeration_energy_demand_kWh_per_kgN_SCENARIO_AE{mid:g}").dropna()
     if len(floor):
         ax.axhline(float(floor.iloc[0]), color=ORANGE, lw=1.5, ls="--",
-                   label=f"demand-based floor 4.57/SAE, SAE {mid:g}")
+                   label=f"demand-based floor 4.57/AE, AE {mid:g}")
     ax.set_yscale("log")
     ax.set_xticks(x, labels)
     ax.set_ylabel("Aeration-equivalent energy (kWh/kg N removed, log)", fontsize=8.5, color=INK)
-    ax.set_title(f"d  Energy per N removed (whiskers: SAE {min(saes):g}-{max(saes):g} kg O2/kWh)", loc="left",
+    ax.set_title(f"d  Energy per N removed (whiskers: field AE {min(saes):g}-{max(saes):g} kg O2/kWh)", loc="left",
                  fontsize=10, color=INK)
     ax.legend(fontsize=7, frameon=False, loc="upper left")
-    fig.suptitle("Figure 8. Per-pulse efficiency under the SAE and kLa SCENARIOS (P3: removal negative, not computed)",
+    eta_st = _metric(pm, "eta_conversion_fraction", "status").reindex(pulses).fillna("").astype(str)
+    nc_txt = "; ".join(f"P{int(p)}: η not computed, {'removal negative' if 'negative' in st else 'removal above the dose'}"
+                       for p, st in eta_st.items() if st != "computed")
+    fig.suptitle("Figure 8. Per-pulse efficiency under the field-AE and kLa SCENARIOS" + (f" ({nc_txt})" if nc_txt else ""),
                  x=0.06, ha="left", fontsize=11, color=INK)
     fig.tight_layout()
     _save(fig, d, "fig8_efficiency", plt)

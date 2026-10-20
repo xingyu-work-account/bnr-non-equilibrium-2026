@@ -6,7 +6,7 @@ quantity,reference,obtained,tolerance,abs_diff,pass,note
 coexistence affinity kJ/mol (documented SCENARIO),317.0,316.8948979518364,2.0,0.10510204816358737,True,
 HCO3- air-equilibrium mmol/L at pH 7.3,0.127,0.12683797225688473,0.001,0.0001620277431152728,True,
 HCO3- air-equilibrium mmol/L at pH 7.8,0.401,0.40109688612900324,0.001,9.688612900321525e-05,True,
-O2 demand min mg O2/L/d (GAIN-CORRECTED),6.0,5.763434415914505,0.6,0.23656558408549522,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
-O2 demand max mg O2/L/d (GAIN-CORRECTED),33.0,77.52693433702237,3.3,44.52693433702237,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
-kLa required min 1/d,0.7,0.6977523505949764,0.07,0.002247649405023533,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
-kLa required max 1/d,4.0,9.385827401576558,0.4,5.385827401576558,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+"O2 demand min mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis)",6.0,5.763434415914505,0.6,0.23656558408549522,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+"O2 demand max mg O2/L/d (SENSITIVITY: linear gain, as in the preliminary analysis)",33.0,23.723213931322782,3.3,9.276786068677218,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+"kLa required min 1/d (SENSITIVITY: linear gain, as in the preliminary analysis)",0.7,0.6977523505949764,0.07,0.002247649405023533,True,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption
+"kLa required max 1/d (SENSITIVITY: linear gain, as in the preliminary analysis)",4.0,2.8720597979809663,0.4,1.1279402020190337,False,tolerance 10 % (reference says 'about'); range over slope windows with positive gain-corrected consumption

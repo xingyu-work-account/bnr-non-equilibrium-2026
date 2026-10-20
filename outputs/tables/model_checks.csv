@@ -1,9 +1,9 @@
 check,where,value,expected,pass
 pulse adds exactly the dose,8.53 d,65.46428371127854,65.46428371127853,True
-pulse adds exactly the dose,10.57 d,65.46428371127851,65.46428371127853,True
+pulse adds exactly the dose,10.57 d,65.46428371127854,65.46428371127853,True
 pulse adds exactly the dose,24.59 d,65.46428371127851,65.46428371127853,True
 pulse adds exactly the dose,32.39 d,65.46428371127854,65.46428371127853,True
-mass balance closes: C_end − (C0 + pulses − consumed),whole record,4.547473508864641e-13,0.0,True
-consumption rate non-negative,every grid time,0.045744884659312306,>= 0,True
-σ = r A / T ≥ 0 with the coexistence SCENARIO affinity,every grid time,4.01757598275852e-08,>= 0,True
+mass balance closes: C_end − (C0 + pulses − consumed),whole record,1.7053025658242404e-13,0.0,True
+consumption rate non-negative,every grid time,0.04570699218981909,>= 0,True
+σ = r A / T ≥ 0 with the coexistence SCENARIO affinity,every grid time,4.0142480505427727e-08,>= 0,True
 σ in situ,"every grid time (model state C, observed pH)",not computed: DO_mg_L missing,>= 0,not computed
