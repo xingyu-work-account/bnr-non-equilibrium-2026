@@ -12,7 +12,8 @@ from __future__ import annotations
 import hashlib
 import math
 import os
-from concurrent.futures import ProcessPoolExecutor
+import re
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -69,6 +70,11 @@ RAW_MEASURED_COLUMNS = ("slope_mgNH4_L_d", "slope_ci95_low_mgNH4_L_d", "slope_ci
                         "slope_ci95_low_mgN_L_d", "slope_ci95_high_mgN_L_d", "slope_excl_held_mgNH4_L_d",
                         "slope_excl_held_ci95_low_mgNH4_L_d", "slope_excl_held_ci95_high_mgNH4_L_d",
                         "slope_fragment_diagnostic_mgNH4_L_d", "median_nh4_mgN_L", "response_fraction_governing_pulse")
+# Y4: allow-list of the metrics that may declare NH4-independent (time, pH, transfer capacity, standard free energy,
+# measured stirrer energy); ``*`` stands for a numeric scenario value only. Any other NH4-independent metric raises.
+NH4_INDEPENDENT_METRICS = ("t_pulse_d", "segment_end_d", "median_pH", "o2_supply_capacity_mgO2_SCENARIO_kLa*_T25C",
+                           "free_energy_per_fully_converted_pulse_J_SCENARIO_T25C", "stirrer_energy_J")
+_NH4_INDEPENDENT_RE = "^(" + "|".join(re.escape(m).replace(r"\*", r"[0-9][0-9.e+-]*") for m in NH4_INDEPENDENT_METRICS) + ")$"
 MODEL_BASED_TOKEN = r"(?<![Nn]ot )(?<![A-Za-z0-9])MODEL[-_]BASED(?![A-Za-z0-9])"  # "not MODEL-BASED" is not the label
 INVERSION_NOTE =("quasi-static inversion C = exp((log R − a − offsets)/b(t)) of the 0.01 d grid reading; the sensor "
                   "lag τ is not inverted (slopes after ~3τ are unaffected, window starts within 3τ of a boundary carry "
@@ -87,7 +93,8 @@ def _as_text(s: pd.Series) -> pd.Series:
 def check_single_observation_model(df: pd.DataFrame, model_col: str = "nh4_observation_model",
                                    label_cols: tuple[str, ...] = ("metric", "basis"),
                                    series_col: str = "nh4_series",
-                                   independent_cols: tuple[str, ...] | None = None) -> str | None:
+                                   independent_cols: tuple[str, ...] | None = None,
+                                   derived_cols: tuple[str, ...] | None = None) -> str | None:
     """Raise :class:`ObservationModelError` unless every row of ``df`` declares its NH4 basis and every primary row
     uses one observation model and one series. Returns the primary model.
 
@@ -99,7 +106,11 @@ def check_single_observation_model(df: pd.DataFrame, model_col: str = "nh4_obser
       metric of ``RAW_MEASURED_METRICS``. In a wide table (one column per quantity), every column of a reading-based
       row is a measured column (``RAW_MEASURED_COLUMNS``), says SENSITIVITY in its name, or is declared NH4-independent
       in ``independent_cols``.
-    - ``NH4_INDEPENDENT`` rows carry no NH4 series. Primary rows share one series (:func:`check_single_series`).
+    - ``NH4_INDEPENDENT`` rows carry no NH4 series. In a long table their metric is on ``NH4_INDEPENDENT_METRICS``
+      (Y4); a wide table with such rows declares ``independent_cols`` and carries no other column.
+    - A wide table with primary rows declares its NH4-independent columns (``independent_cols``) and its C(t)-derived
+      columns (``derived_cols``); an undeclared column raises (Y4).
+    - Primary rows share one series (:func:`check_single_series`).
     """
     m = _as_text(df[model_col])
     cols = [c for c in label_cols if c in df.columns]
@@ -133,6 +144,27 @@ def check_single_observation_model(df: pd.DataFrame, model_col: str = "nh4_obser
     if series_col in df.columns and (indep & (_as_text(df[series_col]) != "")).any():
         raise ObservationModelError(f"{NH4_INDEPENDENT} rows carry an NH4 series: {where(indep & (_as_text(df[series_col]) != ''))}")
     is_primary = ~sens & ~raw & ~indep
+    if metric is not None:
+        outside = indep & ~metric.str.match(_NH4_INDEPENDENT_RE)
+        if outside.any():
+            raise ObservationModelError(f"{NH4_INDEPENDENT} metrics outside the allow-list NH4_INDEPENDENT_METRICS: "
+                                        f"{where(outside)}")
+    else:
+        prov = {model_col, series_col, *cols}
+        if indep.any():
+            if independent_cols is None:
+                raise ObservationModelError(f"a wide table with {NH4_INDEPENDENT} rows must declare its NH4-independent "
+                                            "columns")
+            bad = [c for c in df.columns if c not in prov and c not in independent_cols]
+            if bad:
+                raise ObservationModelError(f"columns of {NH4_INDEPENDENT} rows not declared NH4-independent: {bad}")
+        if is_primary.any():
+            if independent_cols is None or derived_cols is None:
+                raise ObservationModelError("a wide table with primary rows must declare its NH4-independent and its "
+                                            "C(t)-derived columns")
+            bad = [c for c in df.columns if c not in prov and c not in independent_cols and c not in derived_cols]
+            if bad:
+                raise ObservationModelError(f"undeclared columns in a wide table with primary rows: {bad}")
     primary = sorted(set(m[is_primary]))
     if len(primary) > 1:
         raise ObservationModelError(f"one output mixes NH4 observation models: {primary}")
@@ -197,19 +229,38 @@ class ModelSpec:
     alk: bool = False  # W5: Monod limitation by the alkalinity state Alk0 − 2 n_consumed / M_N (substrate side)
 
 
+# Y6: the Haldane law r = vmax S/(Ks + S + S²/Ki) in the inhibition branch is a three-parameter valley in (vmax, Ks, Ki)
+# (|corr| 0.99998 at the alkalinity x FA stopping point, docs/progress.md); it is fitted as the initial slope
+# α = vmax/Ks, Ks and the substrate of maximum rate S_opt = √(Ks Ki): r = α S/(1 + S/Ks + S²/S_opt²)
+HALDANE_SHAPE = ("Ks_mgNH3_L", "Sopt_mgNH3_L")
+HALDANE_ALPHA = ("alpha_mgN_L_d_per_mgNH3_L", "alpha0_mgN_L_d_per_mgNH3_L")
+
+
+def haldane_natural(kin: dict[str, float]) -> dict[str, float]:
+    """(vmax or v0, Ks, Ki) of a Haldane law fitted as (α, Ks, S_opt); other parameters unchanged."""
+    out = dict(kin)
+    for a, v in zip(HALDANE_ALPHA, ("vmax_mgN_L_d", "v0_mgN_L_d")):
+        if a in kin:
+            out[v] = kin[a] * kin["Ks_mgNH3_L"]
+    if "Sopt_mgNH3_L" in kin:
+        out["Ki_mgNH3_L"] = kin["Sopt_mgNH3_L"] ** 2 / kin["Ks_mgNH3_L"]
+    return out
+
+
 def model_specs(cfg: Config) -> list[ModelSpec]:
     specs = [ModelSpec("null_no_consumption", (), False, False),
              ModelSpec("biomass_decay", ("v0_mgN_L_d", "kd_per_d"), False, True)]
+    # Y6: every Haldane law is fitted as (α = vmax/Ks, Ks, S_opt = √(Ks Ki)), the same function (HALDANE_ALPHA, HALDANE_SHAPE)
     for T in cfg.get("scenarios.temperature_C"):
-        specs.append(ModelSpec(f"haldane_FA_SCENARIO_T{T:g}C", ("vmax_mgN_L_d", "Ks_mgNH3_L", "Ki_mgNH3_L"), True, False, T))
-        specs.append(ModelSpec(f"combined_SCENARIO_T{T:g}C", ("v0_mgN_L_d", "kd_per_d", "Ks_mgNH3_L", "Ki_mgNH3_L"),
+        specs.append(ModelSpec(f"haldane_FA_SCENARIO_T{T:g}C", ("alpha_mgN_L_d_per_mgNH3_L", *HALDANE_SHAPE), True, False, T))
+        specs.append(ModelSpec(f"combined_SCENARIO_T{T:g}C", ("alpha0_mgN_L_d_per_mgNH3_L", "kd_per_d", *HALDANE_SHAPE),
                                True, True, T))
     # W5: substrate-side limitation by alkalinity / inorganic carbon, alone and with FA inhibition (TAN = model state,
     # i.e. the same W1 observation model), competing with biomass decay under the unchanged chronological split
     specs.append(ModelSpec("alkalinity_limited", ("v0_mgN_L_d", "Alk0_meq_L"), False, False, alk=True))
     for T in cfg.get("scenarios.temperature_C"):
-        specs.append(ModelSpec(f"alkalinity_FA_SCENARIO_T{T:g}C", ("vmax_mgN_L_d", "Ks_mgNH3_L", "Ki_mgNH3_L", "Alk0_meq_L"),
-                               True, False, T, alk=True))
+        specs.append(ModelSpec(f"alkalinity_FA_SCENARIO_T{T:g}C", ("alpha_mgN_L_d_per_mgNH3_L", *HALDANE_SHAPE,
+                                                                  "Alk0_meq_L"), True, False, T, alk=True))
     return specs
 
 
@@ -228,6 +279,7 @@ class ModelData:
     dose: float
     offsets: list[float]  # electrode offset jump times, d
     offset_guess: list[float]  # log level change at each offset (M2)
+    volume: object = None  # Y7: a SCENARIO ``volume.VolumeScenario``; None = the constant-volume (primary) model
 
 
 def build_data(cfg: Config, grid: pd.DataFrame, jumps: pd.DataFrame) -> ModelData:
@@ -250,25 +302,56 @@ def fa_factor(ph: np.ndarray, T_C: float) -> np.ndarray:
 
 
 def make_rate(spec: ModelSpec, kin: dict[str, float]):
-    """r(t, C, f, n) >= 0 in mg N/L/d; f = free-ammonia factor at t; n = N consumed since T0 (mg N/L), which sets the
-    alkalinity state of the W5 candidates (ignored by the others)."""
+    """r(t, C, f, n, φ) >= 0 in mg N/L/d; f = free-ammonia factor at t; n = N consumed since T0 (mg N/L), which sets the
+    alkalinity state of the W5 candidates (ignored by the others); φ = V0/V(t) under a SCENARIO volume (Y7; 1 at
+    constant volume, where the arithmetic is unchanged)."""
     if spec.name == "null_no_consumption":
-        return lambda t, c, f, n=0.0: 0.0
+        return lambda t, c, f, n=0.0, phi=1.0: 0.0
+    alpha = kin.get(HALDANE_ALPHA[0], kin.get(HALDANE_ALPHA[1]))
+    if alpha is not None:  # Y6: the (α, Ks, S_opt) form
+        return _haldane_alpha_rate(spec, alpha, kin)
     v = kin.get("v0_mgN_L_d", kin.get("vmax_mgN_L_d"))
     kd = kin.get("kd_per_d", 0.0)
     ks, ki = kin.get("Ks_mgNH3_L"), kin.get("Ki_mgNH3_L")
     alk0 = kin.get("Alk0_meq_L")
 
-    def rate(t, c, f, n=0.0):
+    def rate(t, c, f, n=0.0, phi=1.0):
         c = max(0.0, c)
         act = v * math.exp(-kd * (t - T0_D)) if spec.decay else v
+        if phi != 1.0:  # Y7: a SCENARIO volume concentrates the biomass by φ = V0/V(t)
+            act *= phi
         if spec.alk:
             a = alkalinity_state_meq_L(alk0, n)
+            if phi != 1.0:
+                a *= phi
             act *= a / (K_ALK_ASM3_MEQ_L + a)
         if spec.fa:
             s = f * c
             return act * s / (ks + s + s * s / ki)
         return act * c / (K_NH_ASM_MG_N_L + c)
+
+    return rate
+
+
+def _haldane_alpha_rate(spec: ModelSpec, alpha: float, kin: dict[str, float]):
+    """r = act α S/(1 + S/Ks + S²/S_opt²), S = FA; act = exp(−kd (t − 1)) for decay, the alkalinity factor for the
+    W5 variant, φ under a SCENARIO volume (Y6, Y7)."""
+    kd = kin.get("kd_per_d", 0.0)
+    ks, so2 = kin["Ks_mgNH3_L"], kin["Sopt_mgNH3_L"] ** 2
+    alk0 = kin.get("Alk0_meq_L")
+
+    def rate(t, c, f, n=0.0, phi=1.0):
+        c = max(0.0, c)
+        act = alpha * math.exp(-kd * (t - T0_D)) if spec.decay else alpha
+        if phi != 1.0:
+            act *= phi
+        if spec.alk:
+            a = alkalinity_state_meq_L(alk0, n)
+            if phi != 1.0:
+                a *= phi
+            act *= a / (K_ALK_ASM3_MEQ_L + a)
+        s = f * c
+        return act * s / (1.0 + s / ks + s * s / so2)
 
     return rate
 
@@ -327,6 +410,62 @@ def simulate(spec: ModelSpec, kin: dict[str, float], c0: float, t: np.ndarray, p
     return Simulation(np.array(cs), np.array(rs), consumed, jumps)
 
 
+def simulate_volume(spec: ModelSpec, kin: dict[str, float], c0: float, t: np.ndarray, ph: np.ndarray,
+                    pulses: list[float], dose: float, vol) -> Simulation:
+    """Y7: :func:`simulate` under a SCENARIO volume V(t) = V0 − E (t − t0) (``volume.VolumeScenario``). Every conserved
+    amount is concentrated by φ(t) = V0/V(t): dC/dt = −r + C E/V(t), with the biomass activity and the alkalinity state
+    of the rate law multiplied by φ, and n (N consumed per initial litre) growing at r/φ; a pulse adds its N mass into
+    V(t_p), i.e. ``dose`` (at V0) x φ(t_p). RK4 on the bin times with the pulse splitting of :func:`simulate`."""
+    rate = make_rate(spec, kin)
+    f = fa_factor(ph, spec.T_C).tolist() if spec.fa else [0.0] * len(t)
+    v0, e, t0 = float(vol.v0_L), float(vol.net_loss_L_per_d), float(vol.t0_d)
+
+    def deriv(s, c, fs, n):
+        v = v0 - e * (s - t0)
+        if v <= 0:
+            raise ValueError(f"volume scenario {vol.name!r} empties the vessel before t = {s:g} d")
+        phi = v0 / v
+        r = rate(s, c, fs, n, phi)
+        return r - max(c, 0.0) * e / v, r / phi, r  # (−dC/dt, dn/dt, volumetric rate)
+
+    tl = t.tolist()
+    n_bins = len(tl)
+    c, consumed = c0, 0.0
+    cs, rs = [0.0] * n_bins, [0.0] * n_bins
+    cs[0], rs[0] = c, deriv(tl[0], c, f[0], 0.0)[2]
+    jumps = []
+    pk = [p for p in pulses if tl[0] < p <= tl[-1]]
+    ip = 0
+    for i in range(1, n_bins):
+        ta, tb, fa, fb = tl[i - 1], tl[i], f[i - 1], f[i]
+        span = tb - ta
+        stops = [ta]
+        while ip < len(pk) and pk[ip] <= tb:
+            stops.append(pk[ip])
+            ip += 1
+        stops.append(tb)
+        for j in range(len(stops) - 1):
+            s0, s1 = stops[j], stops[j + 1]
+            h = s1 - s0
+            if h > 0:
+                f0 = fa + (fb - fa) * (s0 - ta) / span
+                f1 = fa + (fb - fa) * (s1 - ta) / span
+                fm = 0.5 * (f0 + f1)
+                k1c, k1n, _ = deriv(s0, c, f0, consumed)
+                k2c, k2n, _ = deriv(s0 + h / 2, c - h / 2 * k1c, fm, consumed + h / 2 * k1n)
+                k3c, k3n, _ = deriv(s0 + h / 2, c - h / 2 * k2c, fm, consumed + h / 2 * k2n)
+                k4c, k4n, _ = deriv(s1, c - h * k3c, f1, consumed + h * k3n)
+                c -= h * (k1c + 2 * k2c + 2 * k3c + k4c) / 6
+                consumed += h * (k1n + 2 * k2n + 2 * k3n + k4n) / 6
+            if j < len(stops) - 2:  # a pulse at s1: its N mass into V(s1)
+                step = dose * v0 / (v0 - e * (s1 - t0))
+                jumps.append((s1, c, c + step))
+                c += step
+        cs[i] = c
+        rs[i] = deriv(tb, c, fb, consumed)[2]
+    return Simulation(np.array(cs), np.array(rs), consumed, jumps)
+
+
 # --- Parameters ----------------------------------------------------------------------------
 @dataclass
 class Layout:
@@ -361,6 +500,9 @@ def layout(spec: ModelSpec, data: ModelData) -> Layout:
 def initial_guess(spec: ModelSpec, data: ModelData, lay: Layout) -> np.ndarray:
     g = {"v0_mgN_L_d": 5.0, "vmax_mgN_L_d": 5.0, "kd_per_d": 0.05, "Ks_mgNH3_L": 0.5, "Ki_mgNH3_L": 1.0,
          "Alk0_meq_L": 10.0}
+    # Y6: the (α, Ks, S_opt) start is the (vmax, Ks, Ki) default start transformed (α = 10, S_opt = 0.707 mg NH3/L)
+    g[HALDANE_ALPHA[0]] = g[HALDANE_ALPHA[1]] = g["vmax_mgN_L_d"] / g["Ks_mgNH3_L"]
+    g["Sopt_mgNH3_L"] = math.sqrt(g["Ks_mgNH3_L"] * g["Ki_mgNH3_L"])
     x = [math.log(g[k]) for k in spec.kinetic]
     x += [float(data.log_r[0]), 0.0, 1.0, 0.0, math.log(0.05)]
     x += list(data.offset_guess)
@@ -399,7 +541,10 @@ def invert_observation(log_r: np.ndarray, t: np.ndarray, p: dict, offsets: list[
 
 def predict(spec: ModelSpec, data: ModelData, lay: Layout, x: np.ndarray) -> tuple[np.ndarray, Simulation]:
     p = unpack(spec, data, lay, x)
-    sim = simulate(spec, p["kin"], p["C0_mgN_L"], data.t, data.ph, data.pulses, data.dose)
+    if data.volume is None:
+        sim = simulate(spec, p["kin"], p["C0_mgN_L"], data.t, data.ph, data.pulses, data.dose)
+    else:
+        sim = simulate_volume(spec, p["kin"], p["C0_mgN_L"], data.t, data.ph, data.pulses, data.dose, data.volume)
     return observe(sim.c, data.t, p, data.offsets), sim
 
 
@@ -450,7 +595,7 @@ def truncated(data: ModelData, t_end: float) -> ModelData:
     if keep.all():
         return data
     return ModelData(t=data.t[keep], log_r=data.log_r[keep], ph=data.ph[keep], pulses=data.pulses, dose=data.dose,
-                     offsets=data.offsets, offset_guess=data.offset_guess)
+                     offsets=data.offsets, offset_guess=data.offset_guess, volume=data.volume)
 
 
 def window_skill(spec, data, lay, x, window) -> dict:
@@ -527,25 +672,28 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
                 x0[len(lay.names) - len(data.offsets) + i] = 0.0
         setup[spec.name] = (lay, x0, free)
     cals, all_starts = calibrate_all(specs, data, CAL, setup)
+    # Y1: out-of-sample skills of every start (DIAGNOSTIC; never used to choose a calibration or a model)
+    oos = iter(_map(_start_skill_job, [(spec, data, setup[spec.name][0], f.x, TEST) for spec in specs
+                                       for f in all_starts[spec.name]]))
     start_rows = []
     for spec in specs:
         lay = setup[spec.name][0]
+        cal = cals[spec.name]
+        n_eff = calibration_n_eff(spec, data, lay, cal)
         for f in all_starts[spec.name]:
+            d = start_delta(f, cal, n_eff)
             start_rows.append({"model": spec.name, "start": f.start, "converged": f.converged, "status": f.status,
                                "nfev": f.nfev, "cal_rmse_log": math.sqrt(f.rss / f.n),
                                "alk0_meq_L": unpack(spec, data, lay, f.x)["Alk0_meq_L"] if spec.alk else np.nan,
                                "sel_rmse_log_diagnostic": window_skill(spec, data, lay, f.x, SEL)["rmse_log"],
-                               "chosen": f.start == cals[spec.name].start})
+                               "chosen": f.start == cals[spec.name].start, "delta_vs_calibration": d,
+                               "inside_95": bool(cal.converged and f.converged and d < CHI2_95_1DOF),
+                               **next(oos)})
     for spec in specs:
         lay, x0, free = setup[spec.name]
         cal = cals[spec.name]
         sel = window_skill(spec, data, lay, cal.x, SEL)
-        test_off = np.array([n.startswith("offset_log_") and float(n[11:-1]) >= TEST[0] for n in lay.names])
-        test_fit = fit(spec, data, lay, TEST, cal.x, test_off)
-        test = window_skill(spec, data, lay, test_fit.x, TEST)
-        unseen = [t for t in data.offsets if t >= TEST[0]]
-        fc_window = (TEST[0], min(unseen) if unseen else TEST[1])
-        forecast = window_skill(spec, data, lay, cal.x, fc_window)
+        test, forecast, unseen, fc_window = out_of_sample(spec, data, lay, cal.x, TEST)
         rows.append({"model": spec.name, "n_params_calibration": int(free.sum()),
                      "cal_rmse_log": math.sqrt(cal.rss / cal.n), "cal_converged": cal.converged,
                      "cal_status": cal.status, "cal_nfev": cal.nfev, "cal_start": cal.start,
@@ -562,14 +710,63 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
         df[f"{col}_skill_vs_null"] = 1 - df[f"{col}_rmse_log"] ** 2 / null[f"{col}_rmse_log"] ** 2
     df = select_converged(df)
     alk = pd.DataFrame(_map(_alk0_job, [(spec, data, lay, cal, all_starts[spec.name]) for spec, lay, cal in fits.values()]))
-    out = pd.concat([df, alk], axis=1)
     st = pd.DataFrame(start_rows)
-    st["sel_skill_vs_null_diagnostic"] = 1 - st["sel_rmse_log_diagnostic"] ** 2 / float(
-        df.set_index("model").loc[NULL_MODEL, "sel_rmse_log"]) ** 2
+    nul = df.set_index("model").loc[NULL_MODEL]
+    for col in ("sel", "test", "forecast"):
+        st[f"{col}_skill_vs_null_diagnostic"] = 1 - st[f"{col}_rmse_log_diagnostic"] ** 2 / float(nul[f"{col}_rmse_log"]) ** 2
     st["role"] = ("DIAGNOSTIC: every start of the convergence policy; the calibration is the converged start with the "
-                  "lowest RSS (chosen); the selection skill of the other starts is not used")
+                  "lowest RSS (chosen); inside_95 = converged and Δ = n_eff ln(RSS/RSS_calibration) < 3.84; the "
+                  "selection, test and forecast skills of the starts are reported as ranges and never used to choose")
+    out = pd.concat([df, alk, pd.DataFrame([skill_range(st[st["model"] == m]) for m in df["model"]])], axis=1)
     out.attrs["starts"] = st
     return out, fits
+
+
+def out_of_sample(spec, data, lay, x, test_window) -> tuple[dict, dict, list[float], tuple[float, float]]:
+    """Test skill (offsets unseen in calibration refitted on the test window, all else frozen at ``x``) and pure
+    forecast skill (nothing refitted, up to the first unseen offset)."""
+    test_off = np.array([n.startswith("offset_log_") and float(n[11:-1]) >= test_window[0] for n in lay.names])
+    test_fit = fit(spec, data, lay, test_window, x, test_off)
+    test = window_skill(spec, data, lay, test_fit.x, test_window)
+    unseen = [t for t in data.offsets if t >= test_window[0]]
+    fc_window = (test_window[0], min(unseen) if unseen else test_window[1])
+    return test, window_skill(spec, data, lay, x, fc_window), unseen, fc_window
+
+
+def _start_skill_job(args) -> dict:
+    test, forecast, _, _ = out_of_sample(*args)
+    return {"test_rmse_log_diagnostic": test["rmse_log"], "forecast_rmse_log_diagnostic": forecast["rmse_log"]}
+
+
+def calibration_n_eff(spec, data, lay, cal: Fit) -> float:
+    """n_eff of the residuals of a calibration on its window (the n_eff of its profile likelihood)."""
+    mask = (data.t >= cal.window[0]) & (data.t < cal.window[1])
+    return effective_n((predict(spec, data, lay, cal.x)[0] - data.log_r)[mask])[0]
+
+
+def start_delta(f: Fit, cal: Fit, n_eff: float) -> float:
+    """Δ = n_eff ln(RSS_start/RSS_calibration) of one start against the chosen calibration."""
+    return n_eff * math.log(f.rss / cal.rss) if f.rss > 0 and cal.rss > 0 else 0.0
+
+
+SKILL_RANGE_COLS = [f"{c}_skill_{e}_inside_95" for c in ("sel", "test", "forecast") for e in ("min", "max")]
+
+
+def skill_range(st: pd.DataFrame) -> dict:
+    """Y1: range of the selection, test and forecast skills over a candidate's converged starts inside Δ < 3.84 of its
+    calibration (DIAGNOSTIC; the calibration stays the lowest-RSS converged start)."""
+    inside = st[st["inside_95"].astype(bool)]
+    out = {"n_starts_inside_95": len(inside), **dict.fromkeys(SKILL_RANGE_COLS, np.nan)}
+    if not st["converged"].astype(bool).any():
+        out["skill_range_status"] = "not computed: calibration did not converge (no start is an estimate)"
+        return out
+    for c in ("sel", "test", "forecast"):
+        v = inside[f"{c}_skill_vs_null_diagnostic"]
+        out[f"{c}_skill_min_inside_95"], out[f"{c}_skill_max_inside_95"] = float(v.min()), float(v.max())
+    out["skill_range_status"] = (f"{len(inside)} converged starts inside Δ < 3.84 of the calibration: DIAGNOSTIC range, "
+                                 "never used to choose" if len(inside) > 1 else
+                                 "one converged start inside Δ < 3.84 (the calibration): no range")
+    return out
 
 
 def _alk0_job(args) -> dict:
@@ -728,15 +925,32 @@ def profile_likelihood(spec, data, lay, best: Fit, collect: list | None = None,
     return out
 
 
+def distinct_minima(points: list[tuple[float, float]], tol: float = MULTIMODAL_LOG_TOL) -> list[tuple[float, float, int]]:
+    """Y2: (Alk0, Δ) of converged starts grouped into distinct minima: in order of increasing Δ, a start within ``tol``
+    (log scale) of an existing minimum joins it, else it starts a new one. Returns (Alk0, Δ, number of starts) of each
+    minimum's lowest-Δ start."""
+    out: list[list] = []
+    for a, d in sorted(points, key=lambda p: p[1]):
+        for m in out:
+            if abs(math.log(a / m[0])) <= tol:
+                m[2] += 1
+                break
+        else:
+            out.append([a, d, 1])
+    return [tuple(m) for m in out]
+
+
 def alk0_profile(spec: ModelSpec, data: ModelData, lay: Layout, cal: Fit, others: list[Fit] | None = None) -> dict:
     """X1 (d): fitted Alk0 of an alkalinity candidate (its calibration) and the 95 % profile interval of Alk0 on the
     calibration window, or ``not identifiable``; empty for the other candidates.
 
     The profile is warm-started from neighbouring points, so it follows one minimum. Any other converged start of the
     policy (``others``) whose Alk0 differs and whose Δ = n_eff ln(RSS/RSS_min) is below 3.84 lies inside the 95 %
-    region as well; the region is then not one interval and no limit is reported (a validity condition)."""
+    region as well; the region is then not one interval and no limit is reported (a validity condition). Starts within
+    ``MULTIMODAL_LOG_TOL`` of each other are one minimum (:func:`distinct_minima`), listed once with its number of
+    starts; ``alk0_converged_minima_inside_95_meq_L`` lists every distinct converged minimum inside Δ < 3.84."""
     out = {"alk0_fitted_meq_L": np.nan, "alk0_ci95_low_meq_L": np.nan, "alk0_ci95_high_meq_L": np.nan,
-           "alk0_profile_status": ""}
+           "alk0_profile_status": "", "alk0_converged_minima_inside_95_meq_L": ""}
     if not spec.alk:
         return out
     out["alk0_fitted_meq_L"] = unpack(spec, data, lay, cal.x)["Alk0_meq_L"]
@@ -745,16 +959,21 @@ def alk0_profile(spec: ModelSpec, data: ModelData, lay: Layout, cal: Fit, others
         return out
     r = profile_likelihood(spec, data, lay, cal, params=("Alk0_meq_L",)).iloc[0]
     a_best = out["alk0_fitted_meq_L"]
-    inside = []
+    region = []  # Y2: every converged start inside Δ < 3.84 (``others`` contains the calibration's own start)
     for f in others or []:
         a_f = unpack(spec, data, lay, f.x)["Alk0_meq_L"]
         d = float(r["n_eff"]) * math.log(f.rss / cal.rss) if f.rss > 0 else 0.0
-        if f.converged and abs(math.log(a_f / a_best)) > MULTIMODAL_LOG_TOL and d < CHI2_95_1DOF:
-            inside.append((a_f, d))
+        if f.converged and d < CHI2_95_1DOF:
+            region.append((a_f, d))
+    if not any(abs(math.log(a / a_best)) <= MULTIMODAL_LOG_TOL for a, _ in region):
+        region.append((a_best, 0.0))
+    minima = distinct_minima(region)
+    out["alk0_converged_minima_inside_95_meq_L"] = "; ".join(f"{a:.1f}" for a, _, _ in sorted(minima))
+    inside = [(a, d, k) for a, d, k in minima if abs(math.log(a / a_best)) > MULTIMODAL_LOG_TOL]
     if inside:
-        mins = "; ".join(f"Alk0 {a:.1f} meq/L at Δ = {d:.2f}" for a, d in sorted(inside))
+        mins = "; ".join(f"Alk0 {a:.1f} meq/L at Δ = {d:.2f} ({k} start{'s' if k > 1 else ''})" for a, d, k in sorted(inside))
         out["alk0_profile_status"] = (f"not identifiable: the profile has more than one minimum below Δ = 3.84 (fitted "
-                                      f"{a_best:.1f} meq/L; other converged start(s): {mins}); no interval"
+                                      f"{a_best:.1f} meq/L; other converged minima: {mins}); no interval"
                                       + ("" if r["identifiable"] else f"; local profile: {r['reason']}"))
         return out
     if r["identifiable"]:
@@ -909,6 +1128,8 @@ class ModelResult:
     offsets: list[float] = field(default_factory=list)
     truth: Truth | None = None
     starts: pd.DataFrame | None = None  # every start of the convergence policy (X1)
+    volume_candidates: pd.DataFrame | None = None  # Y7: SCENARIO refits per volume scenario (never a primary row)
+    volume_summary: pd.DataFrame | None = None
 
 
 def load_inputs(out_dir: Path) -> dict:
@@ -947,8 +1168,93 @@ def compute(cfg: Config, inputs: dict) -> ModelResult:
         "model_electrode_wholefit_mgN_L": np.exp(lr_full), "model_electrode_calibration_fit_mgN_L": np.exp(lr_cal),
         "model_state_C_mgN_L_conditional_on_C0": sim.c, "model_rate_mgN_L_d": sim.rate,
         "gain_b": p["b0"] + p["b1_per_d"] * (data.t - T0_D)})
+    vol_cands, vol_summary = volume_scenario_refits(cfg, data, selected, truth)
     return ModelResult(comparison, ident, checks, resp, state, selected, split_windows(cfg), list(data.offsets), truth,
-                       starts)
+                       starts, vol_cands, vol_summary)
+
+
+# --- Y7: the model per SCENARIO volume (never a primary row) ------------------------------------------------------
+SCENARIO_ROLE = "SCENARIO refit: never feeds a primary row"
+
+
+class ScenarioLabelError(ValueError):
+    """A volume-scenario refit row does not say SCENARIO."""
+
+
+def check_scenario_rows(df: pd.DataFrame, col: str = "volume_scenario") -> None:
+    """Y7: every row of a volume-scenario refit table names its SCENARIO and carries the SCENARIO role."""
+    lab = _as_text(df[col]) if col in df.columns else pd.Series("", index=df.index)
+    role = _as_text(df["role"]) if "role" in df.columns else pd.Series("", index=df.index)
+    if (~lab.str.contains("SCENARIO") | (role != SCENARIO_ROLE)).any():
+        raise ScenarioLabelError(f"volume-scenario refit rows without a SCENARIO label or role: {int((~lab.str.contains('SCENARIO') | (role != SCENARIO_ROLE)).sum())}")
+
+
+def level_against_band(c: np.ndarray, lo: np.ndarray, hi: np.ndarray, sel: np.ndarray) -> tuple[float, str]:
+    """Median of C over ``sel`` and where it lies against the medians of the band edges."""
+    m, a, b = float(np.median(c[sel])), float(np.median(lo[sel])), float(np.median(hi[sel]))
+    return m, "inside the band" if a <= m <= b else "above the band" if m > b else "below the band"
+
+
+def volume_scenario_refits(cfg: Config, data: ModelData, selected: str, truth: Truth) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Y7: for every non-constant SCENARIO volume, the whole comparison under the unchanged policy and split, and the
+    whole-record refit of the primary selected model; its C(t) level against the constant-volume band."""
+    from . import volume
+
+    scens = [v for v in volume.volume_scenarios(cfg, END_D) if not v.is_constant and "SCENARIO" in v.name]
+    cand_rows, summary = [], []
+    t0, t1 = data.t < T0_D + 0.1, data.t >= END_D - 0.1
+    lo, hi = truth.series["C_inv_band_low_mgN_L"].to_numpy(), truth.series["C_inv_band_high_mgN_L"].to_numpy()
+
+    def evaluate(v):
+        d = replace(data, volume=v)
+        comp, fits = split_evaluation(cfg, d)
+        spec, lay, cal = fits[selected]
+        return d, comp, fits, fit(spec, d, lay, (T0_D, END_D), cal.x, np.ones(len(cal.x), dtype=bool), max_nfev=CAL_MAX_NFEV)
+
+    # the scenarios are independent and each fit is deterministic: they run concurrently (each with its own pool)
+    with ThreadPoolExecutor(max_workers=max(1, len(scens))) as ex:
+        done = list(ex.map(evaluate, scens))
+    for v, (d, comp, fits, full) in zip(scens, done):
+        sel_v = comp.loc[comp["selected"], "model"].iloc[0]
+        for r in comp.itertuples(index=False):
+            cand_rows.append({"volume_scenario": v.name, "net_loss_mL_per_d": 1e3 * v.net_loss_L_per_d, "model": r.model,
+                              "cal_converged": r.cal_converged, "cal_status": r.cal_status, "cal_start": r.cal_start,
+                              "cal_rmse_log": r.cal_rmse_log, "sel_skill_vs_null": r.sel_skill_vs_null,
+                              "test_skill_vs_null": r.test_skill_vs_null, "forecast_skill_vs_null": r.forecast_skill_vs_null,
+                              "selected_in_scenario": r.selected, "selection_status": r.selection_status,
+                              "alk0_fitted_meq_L": r.alk0_fitted_meq_L, "role": SCENARIO_ROLE})
+        spec, lay, _ = fits[selected]
+        c = invert_observation(d.log_r, d.t, unpack(spec, d, lay, full.x), d.offsets)
+        (c_start, where_start), (c_end, where_end) = level_against_band(c, lo, hi, t0), level_against_band(c, lo, hi, t1)
+        row = comp.set_index("model").loc[selected]
+        summary.append({
+            "volume_scenario": v.name, "net_loss_mL_per_d": 1e3 * v.net_loss_L_per_d,
+            "selected_in_scenario": sel_v, "primary_selected": selected, "selected_model_changes": sel_v != selected,
+            "primary_model_sel_skill_vs_null": row["sel_skill_vs_null"], "primary_model_test_skill_vs_null": row["test_skill_vs_null"],
+            "primary_model_forecast_skill_vs_null": row["forecast_skill_vs_null"],
+            "primary_model_cal_converged": row["cal_converged"],
+            "whole_record_refit_rmse_log": math.sqrt(full.rss / full.n), "whole_record_refit_converged": full.converged,
+            "C_start_median_mgN_L": c_start, "C_start_vs_constant_volume_band": where_start,
+            "C_end_median_mgN_L": c_end, "C_end_vs_constant_volume_band": where_end,
+            "constant_volume_C_start_median_mgN_L": float(np.median(truth.series["C_inv_mgN_L"].to_numpy()[t0])),
+            "constant_volume_C_end_median_mgN_L": float(np.median(truth.series["C_inv_mgN_L"].to_numpy()[t1])),
+            "role": SCENARIO_ROLE})
+    cands = pd.DataFrame(cand_rows, columns=VOLUME_CANDIDATE_COLS)  # fixed columns, also without a scenario
+    summ = pd.DataFrame(summary, columns=VOLUME_SUMMARY_COLS)
+    for df in (cands, summ):
+        check_scenario_rows(df)
+    return cands, summ
+
+
+VOLUME_CANDIDATE_COLS = ("volume_scenario", "net_loss_mL_per_d", "model", "cal_converged", "cal_status", "cal_start",
+                         "cal_rmse_log", "sel_skill_vs_null", "test_skill_vs_null", "forecast_skill_vs_null",
+                         "selected_in_scenario", "selection_status", "alk0_fitted_meq_L", "role")
+VOLUME_SUMMARY_COLS = ("volume_scenario", "net_loss_mL_per_d", "selected_in_scenario", "primary_selected",
+                       "selected_model_changes", "primary_model_sel_skill_vs_null", "primary_model_test_skill_vs_null",
+                       "primary_model_forecast_skill_vs_null", "primary_model_cal_converged",
+                       "whole_record_refit_rmse_log", "whole_record_refit_converged", "C_start_median_mgN_L",
+                       "C_start_vs_constant_volume_band", "C_end_median_mgN_L", "C_end_vs_constant_volume_band",
+                       "constant_volume_C_start_median_mgN_L", "constant_volume_C_end_median_mgN_L", "role")
 
 
 def figure(cfg: Config, r: ModelResult, png: Path, svg: Path) -> None:
@@ -1033,7 +1339,8 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         "",
         (f"State: true NH4 C(t) in mg N/L from day {T0_D}, +{thermo.pulse_dose_from_config(cfg).n_mg_L:.4f} mg N/L "
         "exactly at each pulse, dC/dt = −r ≥ 0. Rate laws: Haldane in free ammonia, r = vmax S/(Ks + S + S²/Ki) with "
-        "S = FA(C, pH(t), temperature SCENARIO); first-order decay of biomass activity, r = v0 exp(−kd (t − 1)) "
+        "S = FA(C, pH(t), temperature SCENARIO), fitted as α = vmax/Ks, Ks and S_opt = √(Ks Ki) (r = α S/(1 + S/Ks + "
+        "S²/S_opt²), the same law; pass 4, Y6); first-order decay of biomass activity, r = v0 exp(−kd (t − 1)) "
         f"C/(K_NH + C) with K_NH = {K_NH_ASM_MG_N_L} mg N/L fixed (ASM1 default, not fitted); combined, r = v0 "
         "exp(−kd (t − 1)) x Haldane(S); W5 substrate-side candidates: alkalinity-limited, r = v0 A/(K_ALK + A) "
         f"C/(K_NH + C), and alkalinity x Haldane(S), with the alkalinity state A = Alk0 − 2 n/M_N (n = N consumed "
@@ -1097,6 +1404,15 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         "and the band edge is only the last evaluated vector. `outputs/processed/nh4_truth.parquet` holds the series."),
         "",
         md_table(r.truth.summary) if r.truth is not None else "not computed",
+        "",
+        "## The model per SCENARIO volume (Y7; never a primary row)",
+        "",
+        ("Every candidate calibrated and selected under the same policy and split with V(t) = V0 − E t (pulse doses, C, "
+         "the biomass activity and the alkalinity state concentrated by V0/V(t)); the primary selected model refitted "
+         "on the whole record, and its C(t) compared with the constant-volume band. SCENARIO values only: the primary "
+         "C(t) and every primary row stay at constant volume. Every candidate row: `model_volume_scenarios.csv`."),
+        "",
+        md_table(r.volume_summary.drop(columns=["role"])) if r.volume_summary is not None else "not computed",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -1117,6 +1433,8 @@ def run(cfg: Config, out_dir) -> ModelResult:
     r.truth.series.to_parquet(d["processed"] / "nh4_truth.parquet", index=False)
     r.truth.vectors.to_csv(d["tables"] / "nh4_truth_vectors.csv", index=False)
     r.truth.summary.to_csv(d["tables"] / "nh4_truth_summary.csv", index=False)
+    r.volume_candidates.to_csv(d["tables"] / "model_volume_scenarios.csv", index=False)
+    r.volume_summary.to_csv(d["tables"] / "model_volume_scenario_summary.csv", index=False)
     figure(cfg, r, d["figures"] / "fig6_model.png", d["figures"] / "fig6_model.svg")
     write_report(cfg, r, d["reports"] / "model.md")
     return r

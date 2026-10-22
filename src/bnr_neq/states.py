@@ -63,6 +63,12 @@ SEED = 20261019
 
 STATES = ("active_nitrification", "inactive_oversupplied", "oxygen_limited")
 ARTIFACT, UNCLASSIFIED = "sensor_artifact", "unclassified"
+# Y3: synthetic check of the slope interval (AR(1) errors, 101 points), fixed before the run; the grid spans the
+# record's median ρ̂ of C(t) (0.93 > the mean ρ̂ 0.88 at φ = 0.95), and φ = 0.9 is the reference of the pass-3 check
+COVERAGE_PHIS = (0.5, 0.9, 0.95, 0.98)
+COVERAGE_REFERENCE_PHI = 0.9
+COVERAGE_WINDOWS = 600
+COVERAGE_SLOPE, COVERAGE_NOISE, COVERAGE_BURN_IN = -2.0, 0.05, 300
 
 
 class StateRuleError(ValueError):
@@ -188,6 +194,73 @@ def rolling_theil_sen(t: np.ndarray, y: np.ndarray, clean: np.ndarray, half: int
             k = interval_scale(len(tt), rho)
             out[:, i] = (r.slope, r.slope - k * (r.slope - r.low_slope), r.slope + k * (r.high_slope - r.slope), rho)
     return out
+
+
+def ar1(n: int, phi: float, seed: int) -> np.ndarray:
+    """AR(1) series x_i = φ x_{i−1} + e_i with unit normal innovations (fixed seed)."""
+    e = np.random.default_rng(seed).normal(size=n)
+    x = np.empty(n)
+    x[0] = e[0]
+    for i in range(1, n):
+        x[i] = phi * x[i - 1] + e[i]
+    return x
+
+
+def interval_coverage(phis=COVERAGE_PHIS, n_windows: int = COVERAGE_WINDOWS, seed: int = SEED) -> pd.DataFrame:
+    """Y3: coverage of the true slope by the production interval at the centre of 2 half + 1 point windows with AR(1)
+    errors: unscaled (independent points), production (ρ̂ from the window) and with the true ρ = φ. Synthetic data
+    only (NH4-independent); it quantifies the residual undercoverage of the ρ̂ estimator on 101 points."""
+    rng = np.random.default_rng(seed)
+    n = 2 * SLOPE_HALF_BINS + 1
+    t = BIN_D * np.arange(n)
+    c = SLOPE_HALF_BINS
+    rows = []
+    for phi in phis:
+        hit = {"unscaled": 0, "estimated": 0, "true": 0}
+        rhos = []
+        for _ in range(n_windows):
+            y = COVERAGE_SLOPE * t + COVERAGE_NOISE * ar1(n + COVERAGE_BURN_IN, phi, int(rng.integers(1 << 31)))[
+                COVERAGE_BURN_IN:]
+            out = rolling_theil_sen(t, y, np.ones(n, dtype=bool))
+            r = theilslopes(y, t, alpha=CI_ALPHA)
+            k = interval_scale(n, phi)
+            hit["estimated"] += out[1, c] <= COVERAGE_SLOPE <= out[2, c]
+            hit["unscaled"] += r.low_slope <= COVERAGE_SLOPE <= r.high_slope
+            hit["true"] += (r.slope - k * (r.slope - r.low_slope) <= COVERAGE_SLOPE
+                            <= r.slope + k * (r.high_slope - r.slope))
+            rhos.append(out[3, c])
+        rows.append({"phi": phi, "n_points": n, "n_windows": n_windows, "nominal": CI_ALPHA,
+                     "coverage_unscaled": hit["unscaled"] / n_windows,
+                     "coverage_scaled_estimated_rho": hit["estimated"] / n_windows,
+                     "coverage_scaled_true_rho": hit["true"] / n_windows,
+                     "mean_rho_hat": float(np.mean(rhos)), "median_rho_hat": float(np.median(rhos)),
+                     "reference": phi == COVERAGE_REFERENCE_PHI})
+    out = pd.DataFrame(rows)
+    out["basis"] = ("SYNTHETIC: production rolling_theil_sen on AR(1) errors (fixed seed); coverage_scaled_estimated_rho "
+                    "is the interval the states use")
+    return out
+
+
+def interval_limits_text(coverage: pd.DataFrame, fractions: pd.DataFrame, interval: str = "whole record") -> str:
+    """Y3: the two limits of the idle bounds, with every number from the synthetic check and the state fractions (one
+    source for the report and ``states.md``)."""
+    cov = coverage.assign(phi=coverage["phi"].astype(float))
+    ref = cov.loc[cov["reference"].astype(str).str.lower() == "true"].iloc[0]
+    fr = fractions.set_index("interval").loc[interval]
+    rho = float(fr["median_nh4_slope_resid_lag1"])
+    near = cov.loc[(cov["median_rho_hat"].astype(float) - rho).abs().idxmin()]
+    non_idle = float(fr["fraction_active_nitrification"]) + float(fr["fraction_oxygen_limited"])
+    return (f"Limits of the idle bounds: (a) the autocorrelation-scaled slope interval under-covers, because ρ̂ from "
+            f"{int(ref['n_points'])} detrended points is biased low (synthetic AR(1) check, "
+            f"`states_interval_coverage.csv`): it covers the true slope in {float(ref['coverage_scaled_estimated_rho']):.2f} "
+            f"of the windows at φ = {float(ref['phi']):g} instead of {float(ref['nominal']):.2f}, and in "
+            f"{float(near['coverage_scaled_estimated_rho']):.2f} at φ = {float(near['phi']):g}, whose median ρ̂ "
+            f"({float(near['median_rho_hat']):.2f}) is nearest the record's median ρ̂ of C(t) ({rho:.2f}); so some truly "
+            "flat windows are still called rising or falling, which moves bins from a state of no change to "
+            "unclassified or active. (b) Both bounds are conditional on the state classification: the lower bound "
+            "counts only bins classified inactive, and the upper bound counts the active and oxygen-limited bins as "
+            f"not idle ({100 * non_idle:.1f} % of the {interval}), so a truly idle bin misclassified as active lowers "
+            "the upper bound by at most that share, while the lower bound stays conservative.")
 
 
 def relative_orp(t: np.ndarray, orp: np.ndarray, clean: np.ndarray) -> np.ndarray:
@@ -328,6 +401,8 @@ def state_fractions(bins: pd.DataFrame, lo: float, hi: float, min_classified: fl
     else:
         out["idle_fraction_of_classified_time"] = inactive / classified
         out["status"] = "computed (CONDITIONAL on the classified bins being representative)"
+    if "nh4_slope_resid_lag1" in bins.columns:  # Y3: compared with the synthetic coverage check
+        out["median_nh4_slope_resid_lag1"] = float(bins.loc[m, "nh4_slope_resid_lag1"].median()) if total else np.nan
     return out
 
 
@@ -441,6 +516,28 @@ def comparisons(bins: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
 
 # --- Stage -----------------------------------------------------------------------------------------------------
+# Y4: the NH4-independent and the C(t)-derived columns of each checked table (the provenance columns aside); a column
+# that depends on C(t) only through a state, a run or the bins eligible for a slope is declared C(t)-derived
+STATE_TABLE_COLUMNS = {
+    "bins": (("t_mid_d", "artifact_reason", "pH", "orp_mV_vs_Ag", "ph_slope_per_d", "ph_slope_ci95_low",
+              "ph_slope_ci95_high", "orp_slope_mV_d", "orp_slope_ci95_low", "orp_slope_ci95_high", "ph_slope_resid_lag1",
+              "orp_slope_resid_lag1", "orp_rel_mV", "ph_sign", "orp_sign"),
+             ("C_inv_mgN_L", "nh4_slope_mgN_L_d", "nh4_slope_ci95_low", "nh4_slope_ci95_high", "nh4_slope_resid_lag1",
+              "orp_rel_window_median_mV", "nh4_sign", "state", "state_reason")),
+    "timeline": ((), ("state", "t_start_d", "t_end_d", "duration_d", "n_bins", "median_C_inv_mgN_L",
+                      "median_consumption_mgN_L_d", "median_pH", "median_orp_rel_mV", "reason")),
+    "fractions": (("interval", "t_from_d", "t_to_d", "n_bins", "fraction_sensor_artifact"),
+                  ("fraction_active_nitrification", "fraction_inactive_oversupplied", "fraction_oxygen_limited",
+                   "fraction_unclassified", "n_classified", "n_inactive_oversupplied", "classified_fraction",
+                   "idle_fraction_lower_bound", "idle_fraction_upper_bound", "bounds_status",
+                   "idle_fraction_of_classified_time", "status", "median_nh4_slope_resid_lag1")),
+    "comparisons": (("comparison", "group_a", "group_b", "role", "response"),
+                    ("diff", "ci95_low", "ci95_high", "n_a", "n_b", "block_bins", "n_strata", "n_boot_valid", "status")),
+}
+COVERAGE_COLUMNS = ("phi", "n_points", "n_windows", "nominal", "coverage_unscaled", "coverage_scaled_estimated_rho",
+                    "coverage_scaled_true_rho", "mean_rho_hat", "median_rho_hat", "reference", "basis")
+
+
 @dataclass
 class StateResult:
     bins: pd.DataFrame
@@ -449,6 +546,7 @@ class StateResult:
     comparisons: pd.DataFrame
     rules: pd.DataFrame
     excluded: set = field(default_factory=set)
+    coverage: pd.DataFrame | None = None  # Y3: synthetic check of the slope interval
 
 
 def compute(cfg: Config, inputs: dict) -> StateResult:
@@ -465,9 +563,12 @@ def compute(cfg: Config, inputs: dict) -> StateResult:
     prov = {"nh4_observation_model": str(inputs["truth"]["nh4_observation_model"].iloc[0]),
             "nh4_series": str(inputs["truth"]["nh4_truth_id"].iloc[0])}
     out = [x.assign(**prov) for x in (bins, timeline(bins), fr, comparisons(bins, cfg))]
-    for x in out:
-        model.check_single_observation_model(x, label_cols=())
-    return StateResult(*out, rules_table(excluded), excluded)
+    for x, name in zip(out, ("bins", "timeline", "fractions", "comparisons")):
+        indep, derived = STATE_TABLE_COLUMNS[name]
+        model.check_single_observation_model(x, label_cols=(), independent_cols=indep, derived_cols=derived)
+    cov = interval_coverage().assign(nh4_observation_model=model.NH4_INDEPENDENT, nh4_series="")
+    model.check_single_observation_model(cov, label_cols=(), independent_cols=COVERAGE_COLUMNS)
+    return StateResult(*out, rules_table(excluded), excluded, cov)
 
 
 def load_inputs(out_dir: Path) -> dict:
@@ -512,7 +613,13 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
          + f" (computed only where the classified fraction is ≥ {MIN_CLASSIFIED_FRACTION:g}). Slope intervals are "
          "widened for the autocorrelation inside each window (`*_slope_resid_lag1` in `states_bins.parquet`)."),
         "",
+        interval_limits_text(r.coverage, r.fractions),
+        "",
         md_table(r.fractions, digits=3),
+        "",
+        "Synthetic check of the slope interval (`states_interval_coverage.csv`):",
+        "",
+        md_table(r.coverage.drop(columns=["nh4_observation_model", "nh4_series"]), digits=3),
         "",
         "## NH4 consumption between indicator groups (block bootstrap)",
         "",
@@ -546,5 +653,6 @@ def run(cfg: Config, out_dir) -> StateResult:
     r.fractions.to_csv(d["tables"] / "states_fractions.csv", index=False)
     r.comparisons.to_csv(d["tables"] / "states_comparison.csv", index=False)
     r.rules.to_csv(d["tables"] / "states_rules.csv", index=False)
+    r.coverage.to_csv(d["tables"] / "states_interval_coverage.csv", index=False)
     write_report(cfg, r, d["reports"] / "states.md")
     return r

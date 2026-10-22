@@ -892,7 +892,9 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     check_w2_qualified(m, cons, n)
     check_w2_qualified(tw, cons, n, "governing_pulse")
     model.check_single_observation_model(m)  # X3: the qualified tables are checked again right before they are written
-    model.check_single_observation_model(tw, label_cols=("status", "w2_bound_check"), series_col="nh4_truth_id")
+    indep, derived = S.truth_window_columns(cfg, volume.volume_scenarios(cfg, END_D))
+    model.check_single_observation_model(tw, label_cols=("status", "w2_bound_check"), series_col="nh4_truth_id",
+                                         independent_cols=indep, derived_cols=derived)
     return PulseResult(m, associations(m), tw, bal, cons, volume_constraints(cfg, inputs))
 
 

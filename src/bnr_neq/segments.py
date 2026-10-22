@@ -309,6 +309,21 @@ def median_pairwise_slope(t: np.ndarray, y: np.ndarray) -> float:
     return float(np.median((y[j] - y[i]) / (t[j] - t[i])))
 
 
+def truth_window_columns(cfg: Config, volumes=None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Y4: the NH4-independent and the C(t)-derived columns of :func:`truth_slope_table` (``nh4_truth_windows.csv``)
+    for the configured temperature and volume scenarios."""
+    independent = ("sub_segment", "segment", "governing_pulse", "fit_start_d", "fit_end_d", "n_bins", "held_fraction",
+                   "median_pH")
+    derived = ("median_C_inv_mgN_L", *[f"fa_median_mgNH3_L_SCENARIO_T{T:g}C" for T in scenario_T(cfg)],
+               "consumption_fragment_diagnostic_mgN_L_d", "consumption_fragment_diagnostic_ci95_low_mgN_L_d",
+               "consumption_fragment_diagnostic_ci95_high_mgN_L_d", "consumption_mgN_L_d", "consumption_ci95_low_mgN_L_d",
+               "consumption_ci95_high_mgN_L_d", "consumption_param_band_low_mgN_L_d", "consumption_param_band_high_mgN_L_d",
+               "o2_demand_mgO2_L_d", "o2_demand_ci95_low_mgO2_L_d", "o2_demand_ci95_high_mgO2_L_d",
+               "kla_required_per_d_SCENARIO_T25C",
+               *[f"consumption_mgN_L_d_{volume.slug(v.name)}" for v in volumes or [] if not v.is_constant])
+    return independent, derived
+
+
 def truth_slope_table(cfg: Config, truth: pd.DataFrame, table: pd.DataFrame,
                       band_series: list[np.ndarray] | None = None, volumes=None) -> pd.DataFrame:
     """Consumption, free ammonia and oxygen demand of the M6-inverted C(t) on the M3 slope windows (W1).

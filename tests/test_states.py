@@ -216,8 +216,12 @@ def test_conditional_idle_fraction_needs_the_coverage_but_the_bounds_do_not():
                             "representative of the interval; see the bounds)")
     assert (fr["idle_fraction_lower_bound"], fr["idle_fraction_upper_bound"]) == pytest.approx((0.2, 0.8))
     assert fr["bounds_status"] == "computed"
-    at_threshold = ST.state_fractions(_state_bins(st[:5] + st[5:6] * 5), 0.0, 10.0)  # 4 classified of 10 again
-    assert np.isnan(at_threshold["idle_fraction_of_classified_time"])
+    # pass 4, Y5: a classified fraction of exactly 0.5 (5 of 10) computes the conditional value
+    at_threshold = ST.state_fractions(_state_bins(["inactive_oversupplied"] * 2 + ["active_nitrification"] * 3
+                                                  + [ST.UNCLASSIFIED] * 5), 0.0, 10.0)
+    assert at_threshold["classified_fraction"] == 0.5
+    assert at_threshold["idle_fraction_of_classified_time"] == pytest.approx(2 / 5)
+    assert at_threshold["status"].startswith("computed (CONDITIONAL")
     half = ST.state_fractions(_state_bins(["inactive_oversupplied"] * 5 + [ST.ARTIFACT] * 5), 0.0, 10.0)
     assert half["classified_fraction"] == 0.5 and half["idle_fraction_of_classified_time"] == 1.0  # ≥ 0.5 computes
 

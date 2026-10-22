@@ -118,11 +118,21 @@ def test_every_checked_table_passes_the_hardened_checker(run_all_dir):
     tab = run_all_dir / "tables"
     pm = pd.read_csv(tab / "pulses.csv")
     assert M.check_single_observation_model(pm) == M.OBSERVATION_MODEL
+    # pass 4 (Y4): a wide table with primary rows declares its NH4-independent and C(t)-derived columns
+    from bnr_neq import states as ST
+    from bnr_neq import volume
+    from bnr_neq.config import load_config
+
+    cfg = load_config()
+    indep, derived = S.truth_window_columns(cfg, volume.volume_scenarios(cfg, P.END_D))
     assert M.check_single_observation_model(pd.read_csv(tab / "nh4_truth_windows.csv"),
-                                            label_cols=("status", "w2_bound_check"),
-                                            series_col="nh4_truth_id") == M.OBSERVATION_MODEL
-    for name in ("states_fractions.csv", "states_timeline.csv", "states_comparison.csv"):
-        assert M.check_single_observation_model(pd.read_csv(tab / name), label_cols=()) == M.OBSERVATION_MODEL
+                                            label_cols=("status", "w2_bound_check"), series_col="nh4_truth_id",
+                                            independent_cols=indep, derived_cols=derived) == M.OBSERVATION_MODEL
+    for name, key in (("states_fractions.csv", "fractions"), ("states_timeline.csv", "timeline"),
+                      ("states_comparison.csv", "comparisons")):
+        indep, derived = ST.STATE_TABLE_COLUMNS[key]
+        assert M.check_single_observation_model(pd.read_csv(tab / name), label_cols=(), independent_cols=indep,
+                                                derived_cols=derived) == M.OBSERVATION_MODEL
     assert M.check_single_observation_model(pd.read_csv(tab / "segments.csv"), label_cols=(),
                                             independent_cols=S.SEGMENTS_NH4_INDEPENDENT) is None
     assert M.check_single_observation_model(pd.read_csv(tab / "thermo_oxygen.csv"), label_cols=("role",),
