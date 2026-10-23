@@ -234,6 +234,10 @@ class ModelSpec:
 # α = vmax/Ks, Ks and the substrate of maximum rate S_opt = √(Ks Ki): r = α S/(1 + S/Ks + S²/S_opt²)
 HALDANE_SHAPE = ("Ks_mgNH3_L", "Sopt_mgNH3_L")
 HALDANE_ALPHA = ("alpha_mgN_L_d_per_mgNH3_L", "alpha0_mgN_L_d_per_mgNH3_L")
+# Z3: diagnostic of the reparametrized optimum, reproduced in pass 5 by a scratch script (docs/progress.md); not computed
+# by the pipeline
+HALDANE_CONDITIONING_NOTE = ("finite-difference Jacobian at the converged alkalinity_FA_SCENARIO_T25C calibration, start "
+                             "x0.5: condition number 4.2e6, |corr(Ks, S_opt)| 0.89")
 
 
 def haldane_natural(kin: dict[str, float]) -> dict[str, float]:
@@ -619,6 +623,38 @@ def calibration_starts(spec: ModelSpec, lay: Layout, x0: np.ndarray) -> list[tup
     return out
 
 
+BOUND_TOL_FRACTION = 1e-3  # Z2: a free parameter within 1e-3 x its bound width of a bound (fitted coordinates), inclusive
+
+
+def at_bounds(lay: Layout, x: np.ndarray, free: np.ndarray) -> str:
+    """Z2: the free parameters of a fit at a bound (``BOUND_TOL_FRACTION``; docs/progress.md, pass 5), or ''."""
+    tol = BOUND_TOL_FRACTION * (lay.hi - lay.lo)
+    return "; ".join(n for n, xi, lo, hi, t, f in zip(lay.names, x, lay.lo, lay.hi, tol, free)
+                     if f and (xi - lo <= t or hi - xi <= t))
+
+
+def bounds_text(fit_df: pd.DataFrame) -> str:
+    """Z2: every candidate whose calibration is bound-constrained (`cal_at_bounds`), for §4 and ``model.md``."""
+    flags = fit_df["cal_at_bounds"].fillna("").astype(str)
+    rule = (f"`cal_at_bounds`: a free parameter within {BOUND_TOL_FRACTION:g} x its bound width of a bound, in the "
+            "fitted coordinates")
+    if not (flags != "").any():
+        return f"No calibration is bound-constrained ({rule})."
+    cand = fit_df["model"] != NULL_MODEL
+    named = "; ".join(f"{m} ({f.replace('; ', ', ')})" for m, f in zip(fit_df["model"][cand], flags[cand]) if f)
+    ref = flags[~cand].iloc[0] if (~cand).any() else ""
+    sel = fit_df.loc[fit_df["selected"].astype(bool), "model"].iloc[0] if "selected" in fit_df else None
+    return ((f"Bound-constrained calibrations ({rule}): {named}. A bound, not the data, fixes at least one parameter "
+             "of these calibrations, so their natural-unit kinetic parameters are not estimates; their skills are "
+             "what the comparison uses, and no bound was changed to clear a flag." if named else
+             f"No candidate calibration is bound-constrained ({rule}).")
+            + (f" The reference {NULL_MODEL} (no kinetic parameter) has {ref.replace('; ', ', ')} at a bound."
+               if ref else "")
+            + (f" The identifiability of the selected model ({sel}) is that of its whole-record refit (profile "
+               "likelihood), not of this calibration." if sel is not None and flags[fit_df["model"] == sel].ne("").any()
+               else ""))
+
+
 def _calibration_job(args) -> Fit:
     spec, data, lay, window, x0, free, start = args
     f = fit(spec, data, lay, window, x0, free, max_nfev=CAL_MAX_NFEV)
@@ -688,7 +724,8 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
                                "sel_rmse_log_diagnostic": window_skill(spec, data, lay, f.x, SEL)["rmse_log"],
                                "chosen": f.start == cals[spec.name].start, "delta_vs_calibration": d,
                                "inside_95": bool(cal.converged and f.converged and d < CHI2_95_1DOF),
-                               **next(oos)})
+                               **next(oos), "cal_at_bounds": at_bounds(lay, f.x, f.free)})
+    bounds = []
     for spec in specs:
         lay, x0, free = setup[spec.name]
         cal = cals[spec.name]
@@ -704,6 +741,7 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
                      "forecast_window_d": f"{fc_window[0]:.2f} to {fc_window[1]:.3f}",
                      "forecast_rmse_log": forecast["rmse_log"], "forecast_rmse_mgN_L": forecast["rmse_mgN_L"]})
         fits[spec.name] = (spec, lay, cal)
+        bounds.append(at_bounds(lay, cal.x, cal.free))
     df = pd.DataFrame(rows)
     null = df.set_index("model").loc["null_no_consumption"]
     for col in ("sel", "test", "forecast"):
@@ -718,6 +756,7 @@ def split_evaluation(cfg: Config, data: ModelData, windows: SplitWindows | None 
                   "lowest RSS (chosen); inside_95 = converged and Δ = n_eff ln(RSS/RSS_calibration) < 3.84; the "
                   "selection, test and forecast skills of the starts are reported as ranges and never used to choose")
     out = pd.concat([df, alk, pd.DataFrame([skill_range(st[st["model"] == m]) for m in df["model"]])], axis=1)
+    out["cal_at_bounds"] = bounds  # Z2 (rows in the order of ``specs``, as ``df``)
     out.attrs["starts"] = st
     return out, fits
 
@@ -1227,6 +1266,7 @@ def volume_scenario_refits(cfg: Config, data: ModelData, selected: str, truth: T
         c = invert_observation(d.log_r, d.t, unpack(spec, d, lay, full.x), d.offsets)
         (c_start, where_start), (c_end, where_end) = level_against_band(c, lo, hi, t0), level_against_band(c, lo, hi, t1)
         row = comp.set_index("model").loc[selected]
+        c_cv = truth.series["C_inv_mgN_L"].to_numpy()
         summary.append({
             "volume_scenario": v.name, "net_loss_mL_per_d": 1e3 * v.net_loss_L_per_d,
             "selected_in_scenario": sel_v, "primary_selected": selected, "selected_model_changes": sel_v != selected,
@@ -1236,9 +1276,9 @@ def volume_scenario_refits(cfg: Config, data: ModelData, selected: str, truth: T
             "whole_record_refit_rmse_log": math.sqrt(full.rss / full.n), "whole_record_refit_converged": full.converged,
             "C_start_median_mgN_L": c_start, "C_start_vs_constant_volume_band": where_start,
             "C_end_median_mgN_L": c_end, "C_end_vs_constant_volume_band": where_end,
-            "constant_volume_C_start_median_mgN_L": float(np.median(truth.series["C_inv_mgN_L"].to_numpy()[t0])),
-            "constant_volume_C_end_median_mgN_L": float(np.median(truth.series["C_inv_mgN_L"].to_numpy()[t1])),
-            "role": SCENARIO_ROLE})
+            "constant_volume_C_start_median_mgN_L": float(np.median(c_cv[t0])),
+            "constant_volume_C_end_median_mgN_L": float(np.median(c_cv[t1])),
+            **phi_scaling(c, c_cv, d.t, v, t0, t1), "role": SCENARIO_ROLE})
     cands = pd.DataFrame(cand_rows, columns=VOLUME_CANDIDATE_COLS)  # fixed columns, also without a scenario
     summ = pd.DataFrame(summary, columns=VOLUME_SUMMARY_COLS)
     for df in (cands, summ):
@@ -1254,7 +1294,59 @@ VOLUME_SUMMARY_COLS = ("volume_scenario", "net_loss_mL_per_d", "selected_in_scen
                        "primary_model_forecast_skill_vs_null", "primary_model_cal_converged",
                        "whole_record_refit_rmse_log", "whole_record_refit_converged", "C_start_median_mgN_L",
                        "C_start_vs_constant_volume_band", "C_end_median_mgN_L", "C_end_vs_constant_volume_band",
-                       "constant_volume_C_start_median_mgN_L", "constant_volume_C_end_median_mgN_L", "role")
+                       "constant_volume_C_start_median_mgN_L", "constant_volume_C_end_median_mgN_L",
+                       "C_start_ratio_to_constant_volume", "phi_start_median", "C_end_ratio_to_constant_volume",
+                       "phi_end_median", "ratio_within_phi_tolerance", "role")
+PHI_SCALING_TOL = 0.05  # Z1: |ratio − φ|/φ, inclusive (docs/progress.md, pass 5)
+
+
+def phi_deviation(ratio: float, phi: float) -> float:
+    """Z1: |ratio − φ|/φ = |ratio/φ − 1| of a scenario-to-constant-volume C ratio against φ = V0/V(t)."""
+    return abs(ratio - phi) / phi
+
+
+def within_phi_tolerance(ratio: float, phi: float) -> bool:
+    return phi_deviation(ratio, phi) <= PHI_SCALING_TOL
+
+
+def phi_scaling(c: np.ndarray, c_cv: np.ndarray, t: np.ndarray, vol, start: np.ndarray, end: np.ndarray) -> dict:
+    """Z1: per window, the ratio of the scenario to the constant-volume median C and the median φ = V0/V(t) over the
+    same bins; whether every ratio is within ``PHI_SCALING_TOL`` of its φ."""
+    out, ok = {}, True
+    for w, sel in (("start", start), ("end", end)):
+        ratio, phi = float(np.median(c[sel])) / float(np.median(c_cv[sel])), float(np.median(vol.factor(t[sel])))
+        out[f"C_{w}_ratio_to_constant_volume"], out[f"phi_{w}_median"] = ratio, phi
+        ok = ok and within_phi_tolerance(ratio, phi)
+    out["ratio_within_phi_tolerance"] = ok
+    return out
+
+
+def volume_scaling_text(vs: pd.DataFrame) -> str:
+    """Z1: whether every scenario C(t) is the constant-volume C(t) scaled by φ = V0/V(t) (start and end windows of
+    `model_volume_scenario_summary.csv`, ``PHI_SCALING_TOL``); one text for §1 point 9, §4 and ``model.md``."""
+    if vs.empty:
+        return ""
+    pairs = [(r["net_loss_mL_per_d"], w, float(r[f"C_{w}_ratio_to_constant_volume"]), float(r[f"phi_{w}_median"]))
+             for _, r in vs.iterrows() for w in ("start", "end")]
+    out = [(e, w, q, p) for e, w, q, p in pairs if not within_phi_tolerance(q, p)]
+    tol = f"|ratio/φ − 1| ≤ {PHI_SCALING_TOL:g}"
+    if out:
+        return ("The scenario C(t) is not the constant-volume C(t) scaled by φ = V0/V(t) within the registered "
+                f"tolerance ({tol}): " + "; ".join(f"{e:g} mL/d, {w}: ratio {q:.3f} against φ {p:.3f}"
+                                                   for e, w, q, p in out)
+                + ". No scaling statement is made, and the scenario and constant-volume N amounts differ there.")
+    end = "; ".join(f"{e:g} mL/d {q:.3f} against {p:.3f}" for e, w, q, p in pairs if w == "end")
+    above = [f"{r['net_loss_mL_per_d']:g}" for _, r in vs.iterrows()
+             if "above the band" in (str(r["C_start_vs_constant_volume_band"]), str(r["C_end_vs_constant_volume_band"]))]
+    start_max = max(abs(p - 1) for e, w, q, p in pairs if w == "start")
+    return ("Every scenario C(t) is the constant-volume C(t) scaled by φ = V0/V(t): in the start and end windows the "
+            "ratio of the scenario to the constant-volume median C equals the median φ of the same window within "
+            f"{tol} (end: {end}). The N amount per initial litre, and with it η, is therefore unchanged, and only "
+            "the concentrations scale by φ"
+            + (f"; \"above the band\" at {' and '.join(above)} mL/d is the evaporative concentration of a band that is "
+               "conditional on constant volume, not more N" if above else "")
+            + (f". At the start φ − 1 ≤ {start_max:.3f}, below the tolerance, so the start window cannot tell scaled "
+               "from unchanged." if start_max < PHI_SCALING_TOL else "."))
 
 
 def figure(cfg: Config, r: ModelResult, png: Path, svg: Path) -> None:
@@ -1349,6 +1441,12 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         f"log C + offsets at every electrode-offset jump detected in M2 ({len(r.offsets)}; the M2 detections are used), "
         "then a first-order lag τ (exact exponential filter). Residuals in log R on the 0.01 d grid."),
         "",
+        (f"What the (α, Ks, S_opt) form did and did not do (pass 5, Z3; {HALDANE_CONDITIONING_NOTE}): it removed the "
+         "near-perfect correlations of (vmax, Ks, Ki) (largest kinetic |corr| 0.99998 → 0.89 at the alkalinity x FA "
+         "optimum), but not the ill-conditioning. The natural-unit Haldane parameters of the alkalinity x FA "
+         "candidates (vmax about 2,600 mg N/L/d, Ki about 0.005 mg NH3/L at that calibration) are therefore not "
+         "estimates; only their skills and Alk0 are reported."),
+        "",
         "## Chronological split and out-of-sample skill",
         "",
         (f"Calibrate on days {CAL[0]}-{CAL[1]} (offsets after day {CAL[1]} not fitted), select on {SEL[0]}-{SEL[1]} with all "
@@ -1362,6 +1460,8 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
          "alkalinity candidates with its 95 % profile interval on the calibration window (n_eff-scaled, as below)."),
         "",
         md_table(c.drop(columns=["test_nuisance"])),
+        "",
+        bounds_text(c),
         "",
         (f"Selected on the selection window: **{r.selected}** (selection skill {sel['sel_skill_vs_null']:.3f}, test skill "
         f"{sel['test_skill_vs_null']:.3f}, pure-forecast skill {sel['forecast_skill_vs_null']:.3f}). It was then refitted "
@@ -1410,7 +1510,9 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         ("Every candidate calibrated and selected under the same policy and split with V(t) = V0 − E t (pulse doses, C, "
          "the biomass activity and the alkalinity state concentrated by V0/V(t)); the primary selected model refitted "
          "on the whole record, and its C(t) compared with the constant-volume band. SCENARIO values only: the primary "
-         "C(t) and every primary row stay at constant volume. Every candidate row: `model_volume_scenarios.csv`."),
+         "C(t) and every primary row stay at constant volume. Every candidate row: `model_volume_scenarios.csv`."
+         + (" " + volume_scaling_text(r.volume_summary) if r.volume_summary is not None and len(r.volume_summary)
+            else "")),
         "",
         md_table(r.volume_summary.drop(columns=["role"])) if r.volume_summary is not None else "not computed",
     ]

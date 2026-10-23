@@ -94,14 +94,16 @@ TABLE_DESCRIPTIONS = {
     "dynamics_electrode.csv": "M5: electrode-dynamics guard",
     "model_fit.csv": ("M6/W5: model comparison under one convergence policy: convergence, selection status, "
                       "out-of-sample skill, fitted Alk0 and its profile interval, skill range over the starts inside "
-                      "Δ < 3.84"),
+                      "Δ < 3.84, free parameters at a bound (`cal_at_bounds`)"),
     "model_calibration_starts.csv": ("X1/Y1: every start of the convergence policy per candidate, its Δ against the "
-                                     "calibration and its selection, test and forecast skill (diagnostic)"),
+                                     "calibration and its selection, test and forecast skill (diagnostic), free "
+                                     "parameters at a bound"),
     "model_identifiability.csv": "M6: profile-likelihood identifiability (with one-sided crossings)",
     "model_volume_scenarios.csv": ("Y7: SCENARIO refit of every candidate per evaporation scenario (convergence, skills, "
                                    "selection); never feeds a primary row"),
     "model_volume_scenario_summary.csv": ("Y7: per evaporation SCENARIO, the selected model and the primary model's "
-                                          "refit and C(t) level against the constant-volume band; never a primary row"),
+                                          "refit and C(t) level against the constant-volume band, its ratio to the "
+                                          "constant-volume C(t) against φ = V0/V(t); never a primary row"),
     "model_checks.csv": "M6: mass-balance and σ consistency checks",
     "model_response_fractions.csv": "M6: model-implied against observed response fractions",
     "nh4_truth_summary.csv": "W1: the single NH4 observation model, its inverted C(t) and band",
@@ -421,7 +423,7 @@ def energy_table(pm: pd.DataFrame) -> pd.DataFrame:
 
 def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     """The one-page process summary; every number from a generated table."""
-    from . import alkalinity, states
+    from . import alkalinity, model, states
 
     pm = t["pulses.csv"]
     v = t["sensor_verdicts.csv"].set_index("key")["verdict"].astype(str)
@@ -458,18 +460,12 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     fit = t["model_fit.csv"]
     sel = fit.loc[fit["selected"].astype(bool)].iloc[0]
     conv = fit["cal_converged"].astype(str).str.lower().eq("true")
-    alk_models = fit[fit["model"].astype(str).str.startswith("alkalinity")]
-    rival = best_rival(fit)
     open_up = str(ts.get("band_high_open", "False")) == "True"
 
     alk_cmp = alk0_comparison(fit, t["nh4_truth_w2_consistency.csv"])
     cal_end = [c for c in alk_cmp.columns if c.startswith("S2 requirement at pre_pulse")]
     cal_end = cal_end[0].removeprefix("S2 requirement at ").removesuffix(" (meq/L)") if cal_end else "end"
 
-    def alk0_txt(r):
-        ci = (f" (95 % profile {float(r['alk0_ci95_low_meq_L']):.1f}-{float(r['alk0_ci95_high_meq_L']):.1f})"
-              if str(r["alk0_profile_status"]) == "identifiable" else f" ({r['alk0_profile_status']})")
-        return f"{r['model']} {float(r['alk0_fitted_meq_L']):.1f} meq/L{ci}"
     vc = t["volume_constraints.csv"].set_index("constraint")
     e_min = float(vc.loc["N conservation over every pulse", "value_mL_per_d"])
     e_max = float(vc.loc[vc.index.str.startswith("liquid present"), "value_mL_per_d"].iloc[0])
@@ -528,35 +524,15 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          f"NH4-free indicator groups, NH4 consumption differs by: pH rising vs not {cmp_txt('pH rising vs not rising (within pulse intervals)')}; "
          f"ORP low vs high {cmp_txt('ORP_rel low vs high (within pulse intervals)')}. No indicator separates the "
          "consumption reliably; these are associations, not causes."),
-        (f"7. **Mechanism.** Every candidate was calibrated under one convergence policy (same starts, same evaluation "
-         f"budget); {int(conv.sum())} of {len(fit)} calibrations converged"
-         + (f" ({', '.join(fit.loc[~conv, 'model'])} did not and are excluded from selection, their skills labelled"
-            + ("; diagnosis of the alkalinity x FA valley and the Haldane reparametrization: pass 4, Y6 in "
-               "`docs/progress.md`" if fit.loc[~conv, "model"].astype(str).str.startswith("alkalinity_FA").any() else "")
-            + ")" if (~conv).any() else "")
-         + f". The chronological split selects **{sel['model']}** (selection skill "
-         f"{float(sel['sel_skill_vs_null']):.3f}, test skill {float(sel['test_skill_vs_null']):.3f}, pure-forecast skill "
-         f"{float(sel['forecast_skill_vs_null']):.3f})"
-         + (f"; the best converged candidate of the other mechanism, {rival['model']}, scores "
-            f"{float(rival['sel_skill_vs_null']):.3f}, {float(rival['test_skill_vs_null']):.3f} and "
-            f"{float(rival['forecast_skill_vs_null']):.3f} at its calibration"
-            + (" (its Alk0 profile is open above in the calibration window: a larger initial alkalinity, i.e. a weaker "
-               "limitation there, fits as well; every start is in `model_calibration_starts.csv`)"
-               if str(rival.get("alk0_profile_status", "")).startswith("not identifiable")
-               and "high side" in str(rival.get("alk0_profile_status", "")) else "")
-            + rival_range_txt(rival) if rival is not None else "")
-         + "".join(f"; {r['model']} scores {float(r['sel_skill_vs_null']):.3f}, {float(r['test_skill_vs_null']):.3f} "
-                   f"and {float(r['forecast_skill_vs_null']):.3f} at its calibration" + rival_range_txt(r)
-                   for r in other_mechanism(fit)[1:])
-         + ". " + selection_robustness_txt(fit, sel, other_mechanism(fit))
-         + " Fitted initial alkalinity of the alkalinity candidates (calibration window, conditional on the model): "
-         + "; ".join(alk0_txt(r) for _, r in alk_models.iterrows())
-         + f". Against the Alk0 that the removal implied by C(t) needs if nitrified (S2, point 4; "
-         f"{float(cons.loc[cal_end, 'alk0_required_if_nitrified_meq_L']):.1f} meq/L at the end of the calibration "
-         f"window, {cal_end}): "
-         + "; ".join(f"{a['model']}: {a['agreement']}" for _, a in alk_cmp.iterrows())
-         + ". An inferred Alk0 is conditional on the rate law, not a measurement. With four pulses, time is confounded "
-         "with activity decay, alkalinity loss, FA and electrode drift."),
+        # Z4: the conclusions only; the per-candidate ranges, rankings and Alk0 minima are in the §4 table
+        (f"7. **Mechanism.** {int(conv.sum())} of {len(fit)} calibrations converged under one policy"
+         + (f" ({', '.join(fit.loc[~conv, 'model'])} did not and are excluded from selection)" if (~conv).any() else "")
+         + f". The split selects **{sel['model']}** (selection skill {float(sel['sel_skill_vs_null']):.3f}, test "
+         f"{float(sel['test_skill_vs_null']):.3f}, forecast {float(sel['forecast_skill_vs_null']):.3f}), and "
+         + mechanism_summary_txt(fit, sel, other_mechanism(fit))
+         + " " + alk0_sentence(fit, alk_cmp, float(cons.loc[cal_end, "alk0_required_if_nitrified_meq_L"]), cal_end)
+         + " With four pulses, time is confounded with activity decay, alkalinity loss, FA and electrode drift "
+         "(ranges, rankings and Alk0 profiles: §4)."),
         (f"8. **Energy and efficiency.** The transferable energy measure is oxygen: 4.57 g O2 per g N removed, i.e. a "
          f"floor of {4.57 / max(saes):.2f}-{4.57 / min(saes):.2f} kWh/kg N at field aeration efficiencies of "
          f"{max(saes):g}-{min(saes):g} kg O2/kWh (SCENARIO). With aeration sized to kLa_O2 = {k_mid:g} 1/d (SCENARIO) "
@@ -568,7 +544,9 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          + states.interval_limits_text(t["states_interval_coverage.csv"], t["states_fractions.csv"])),
         (f"9. **The closed frame is not established.** Conditional on C(t), N conservation over pulse 3 needs a net water "
          f"loss of at least {e_min:.2f} mL/d; liquid was present at the end, so the loss was below {e_max:.2f} mL/d. "
-         "Vessel masses would settle it. " + volume_refit_txt(t["model_volume_scenario_summary.csv"])),
+         "Vessel masses would settle it. " + volume_refit_txt(t["model_volume_scenario_summary.csv"])
+         + (" " + model.volume_scaling_text(t["model_volume_scenario_summary.csv"])
+            if len(t["model_volume_scenario_summary.csv"]) else "")),
     ]
     return lines
 
@@ -647,13 +625,18 @@ def ranking(sel, rival, col: str) -> str:
     return "better" if s_lo > r_hi else "worse" if s_hi < r_lo else "undetermined"
 
 
+def selection_margin(fit: pd.DataFrame, sel) -> tuple[float, float]:
+    """The selected model's lowest selection skill over its starts inside Δ < 3.84, and the highest over those of
+    every other converged candidate (the selection holds if the first exceeds the second)."""
+    conv = fit["cal_converged"].astype(str).str.lower().eq("true")
+    others = fit[conv & (fit["model"] != sel["model"]) & (fit["model"] != "null_no_consumption")]
+    return _range(sel, "sel")[0], others["sel_skill_max_inside_95"].astype(float).max() if len(others) else np.nan
+
+
 def selection_robustness_txt(fit: pd.DataFrame, sel, rivals) -> str:
     """Y1 (b): whether the selection holds against every converged start inside Δ < 3.84 of every other candidate,
     and whether the out-of-sample ranking against each converged candidate of the other mechanism is determined."""
-    conv = fit["cal_converged"].astype(str).str.lower().eq("true")
-    others = fit[conv & (fit["model"] != sel["model"]) & (fit["model"] != "null_no_consumption")]
-    s_min = _range(sel, "sel")[0]
-    o_max = others["sel_skill_max_inside_95"].astype(float).max() if len(others) else np.nan
+    s_min, o_max = selection_margin(fit, sel)
     out = (f"The selection of {sel['model']} {'holds' if s_min > o_max else 'does not hold'} against every converged "
            f"start inside Δ < 3.84 of every other candidate (its lowest selection skill {s_min:.3f} against the highest "
            f"of those starts, {o_max:.3f}).")
@@ -661,16 +644,75 @@ def selection_robustness_txt(fit: pd.DataFrame, sel, rivals) -> str:
         return out
     undetermined = False
     for rival in ([rivals] if isinstance(rivals, pd.Series) else rivals):
-        ranks = {c: ranking(sel, rival, c) for c in ("test", "forecast")}
-        detail = "; ".join(f"{c} {_fmt_range(*_range(sel, c))} against {_fmt_range(*_range(rival, c))}" for c in ranks)
-        if len(set(ranks.values())) == 1 and ranks["test"] != "undetermined":
-            out += (f" Out of sample, {sel['model']} is {ranks['test']} than {rival['model']} over all those starts "
+        detail = "; ".join(f"{c} {_fmt_range(*_range(sel, c))} against {_fmt_range(*_range(rival, c))}"
+                           for c in ("test", "forecast"))
+        if (rank := overall_rank(sel, rival)) != "undetermined":
+            out += (f" Out of sample, {sel['model']} is {rank} than {rival['model']} over all those starts "
                     f"({detail}).")
         else:
             undetermined = True
             out += f" The out-of-sample ranking of {sel['model']} against {rival['model']} is undetermined ({detail})."
     return out + (" The data therefore do not discriminate activity decay from substrate-side (alkalinity) limitation."
                   if undetermined else "")
+
+
+def overall_rank(sel, rival) -> str:
+    """The selected model against a rival out of sample: 'better' / 'worse' only if the test and the forecast ranges
+    are both disjoint in the same direction (``ranking``), else 'undetermined'."""
+    ranks = {ranking(sel, rival, c) for c in ("test", "forecast")}
+    return ranks.pop() if len(ranks) == 1 and "undetermined" not in ranks else "undetermined"
+
+
+def mechanism_summary_txt(fit: pd.DataFrame, sel, rivals: list) -> str:
+    """Z4: §1 point 7 in short: whether the selection holds, and the ranking against each converged candidate of the
+    other mechanism with its test-skill range (the rules of ``selection_robustness_txt``)."""
+    s_min, o_max = selection_margin(fit, sel)
+    out = (f"the selection {'holds' if s_min > o_max else 'does not hold'} against every converged start inside "
+           f"Δ < 3.84 of every other candidate (its lowest selection skill {s_min:.3f} against their highest, "
+           f"{o_max:.3f}).")
+    by = {k: [r for r in rivals if overall_rank(sel, r) == k] for k in ("better", "worse", "undetermined")}
+    rng = lambda rs: " and ".join(f"{r['model']} (test {_fmt_range(*_range(r, 'test'))})" for r in rs)
+    parts = [f"{sel['model']} is {k} than {rng(by[k])}" for k in ("better", "worse") if by[k]]
+    if by["undetermined"]:
+        parts.append(f"its ranking against {rng(by['undetermined'])} is undetermined, so the data do not discriminate "
+                     "activity decay from substrate-side (alkalinity) limitation")
+    return out + (f" Out of sample, {'; '.join(parts)}." if parts else "")
+
+
+def alk0_sentence(fit: pd.DataFrame, alk_cmp: pd.DataFrame, required: float, checkpoint: str) -> str:
+    """Z4: the Alk0 evidence of the converged alkalinity candidates in one sentence (from ``alk0_evidence_txt`` and
+    ``alk0_comparison``)."""
+    if alk_cmp.empty:
+        return ""
+    ok = alk_cmp["cal_converged"].astype(str).str.lower().eq("true")
+    ident = int(alk_cmp.loc[ok, "alk0_profile_status"].astype(str).eq("identifiable").sum())
+    verdicts = {str(a).split(":")[0] for a in alk_cmp.loc[ok, "agreement"]}
+    verdict = (verdicts.pop() if len(verdicts) == 1 else
+               "; ".join(f"{m}: {str(a).split(':')[0]}" for m, a in zip(alk_cmp.loc[ok, "model"], alk_cmp.loc[ok, "agreement"])))
+    return (f"{alk0_evidence_txt(fit)}, identifiable in {f'{ident} of {int(ok.sum())}' if ident else 'none'}; against the {required:.1f} meq/L "
+            f"that the C(t) removal needs if nitrified ({checkpoint}, S2): {verdict}.")
+
+
+def mechanism_table(fit: pd.DataFrame) -> pd.DataFrame:
+    """Z4: per candidate, the starts inside Δ < 3.84, the selection, test and forecast ranges over them, the ranking
+    of the selected model against it (test; forecast; ``ranking``), the Alk0 minima and the bound flag."""
+    sel = fit.loc[fit["selected"].astype(bool)].iloc[0]
+    rows = []
+    for _, r in fit.iterrows():
+        conv = str(r["cal_converged"]).lower() == "true"
+        ok = conv and pd.notna(r["sel_skill_min_inside_95"])
+        minima = str(r.get("alk0_converged_minima_inside_95_meq_L", ""))
+        rows.append({
+            "candidate": r["model"], "converged": r["cal_converged"],
+            "starts inside Δ < 3.84": int(float(r["n_starts_inside_95"])) if pd.notna(r["n_starts_inside_95"]) else 0,
+            **{f"{c} skill": _fmt_range(*_range(r, k)) if ok else "not computed"
+               for c, k in (("selection", "sel"), ("test", "test"), ("forecast", "forecast"))},
+            f"{sel['model']} against it (test; forecast)": (
+                "selected" if r["model"] == sel["model"] else "reference" if r["model"] == "null_no_consumption"
+                else f"{ranking(sel, r, 'test')}; {ranking(sel, r, 'forecast')}" if ok else "not computed"),
+            "Alk0 minima inside Δ < 3.84 (meq/L)": minima if minima not in ("", "nan") else "",
+            "cal_at_bounds": "" if pd.isna(r.get("cal_at_bounds")) else str(r.get("cal_at_bounds"))})
+    return pd.DataFrame(rows)
 
 
 def alk0_evidence_txt(fit: pd.DataFrame) -> str:
@@ -841,14 +883,17 @@ def assemble_report(cfg, out_dir) -> Path:
                                     "selection_status", "sel_skill_vs_null", "test_skill_vs_null",
                                     "forecast_skill_vs_null", "selected"]]), digits=3),
         "",
+        model.bounds_text(fit),
+        "",
         ("Skill range over each candidate's converged starts inside Δ < 3.84 of its calibration (Δ = n_eff ln(RSS/RSS of "
          "the calibration) on the calibration window, n_eff from the calibration's residuals): these starts cannot be "
          "told apart by the calibration window. The ranges are DIAGNOSTIC (the calibration stays the lowest-RSS "
          "converged start; no start's skill is used to choose); every start is in `model_calibration_starts.csv`. "
-         + selection_robustness_txt(fit, fit.loc[fit["selected"].astype(bool)].iloc[0], other_mechanism(fit))),
+         + selection_robustness_txt(fit, fit.loc[fit["selected"].astype(bool)].iloc[0], other_mechanism(fit))
+         + " Per candidate (the ranking of the selected model by the same rule: better or worse only where the two "
+         "ranges are disjoint, else undetermined; Alk0 minima: every distinct converged minimum inside Δ < 3.84):"),
         "",
-        md_table(numeric_cells(fit[["model", "cal_converged", "n_starts_inside_95", *model.SKILL_RANGE_COLS,
-                                    "skill_range_status"]]), digits=3),
+        md_table(mechanism_table(fit), digits=3),
         "",
         ("Fitted initial alkalinity of the alkalinity candidates (calibration window, conditional on each model) against "
          "the Alk0 that the removal implied by C(t) needs (S2, `nh4_truth_w2_consistency.csv`):"),
@@ -858,7 +903,9 @@ def assemble_report(cfg, out_dir) -> Path:
         ("M6 per volume SCENARIO (Y7; SCENARIO, never a primary row): every candidate calibrated under the same policy "
          "and split with V(t) = V0 − E t (doses, C, the biomass activity and the alkalinity state concentrated by "
          "V0/V(t)), and the primary model refitted on the whole record; its C(t) against the constant-volume band "
-         "(medians over the first and last 0.1 d). " + volume_refit_txt(t["model_volume_scenario_summary.csv"])),
+         "(medians over the first and last 0.1 d). " + volume_refit_txt(t["model_volume_scenario_summary.csv"])
+         + (" " + model.volume_scaling_text(t["model_volume_scenario_summary.csv"])
+            if len(t["model_volume_scenario_summary.csv"]) else "")),
         "",
         md_table(numeric_cells(t["model_volume_scenario_summary.csv"].drop(columns=["role"])), digits=3),
         "",

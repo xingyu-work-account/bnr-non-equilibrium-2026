@@ -2,9 +2,7 @@
 limits of the idle bounds (Y3), the NH4-independent allow-list and declared wide-table columns (Y4), and the real-record
 integration checks."""
 
-import subprocess
 from dataclasses import replace
-from io import StringIO
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +15,8 @@ from bnr_neq import states as ST
 
 ROOT = Path(__file__).resolve().parents[1]
 PASS3_COMMIT = "ad51a6a"  # outputs of pass 3, accepted by docs/rereview_2026-10-20_pass3.md
+# Z5 (pass 5): the reference values of PASS3_COMMIT, extracted once with `git show` (command in docs/progress.md)
+PASS3_FIXTURES = ROOT / "tests" / "fixtures" / "pass3"
 
 T_SYN = np.round(np.arange(1.01, 16.0, 0.02), 10)
 PH_SYN = 7.6 - 0.02 * (T_SYN - 1)
@@ -248,11 +248,12 @@ def test_real_report_states_the_skill_range_and_the_limits(run_all_dir):
     alk = fit.loc["alkalinity_limited"]
     inside = st[(st["model"] == "alkalinity_limited") & st["inside_95"]]
     assert int(alk["n_starts_inside_95"]) == len(inside)
-    if len(inside) > 1:  # the range of the indistinguishable starts is in §1 point 7
+    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
+    if len(inside) > 1:  # the range of the indistinguishable starts is in the §4 table (pass 5, Z4; was §1 point 7)
         for c in ("sel", "test", "forecast"):
             v = inside[f"{c}_skill_vs_null_diagnostic"]
             assert alk[f"{c}_skill_min_inside_95"] == pytest.approx(v.min())
-            assert f"{v.min():.3f} to {v.max():.3f}" in point7
+            assert f"{v.min():.3f} to {v.max():.3f}" in sec4
     assert "holds against every converged start" in point7 or "does not hold against" in point7
     for name, g in st.groupby("model"):  # the chosen start reproduces the candidate's own skills
         ch = g[g["chosen"]].iloc[0]
@@ -290,19 +291,26 @@ def test_real_states_tables_pass_the_extended_checker(run_all_dir):
     assert len(ind) and ind["metric"].str.match(M._NH4_INDEPENDENT_RE).all()
 
 
-def _pass3(name: str) -> pd.DataFrame:
-    try:
-        text = subprocess.run(["git", "show", f"{PASS3_COMMIT}:outputs/tables/{name}"], cwd=ROOT, check=True,
-                              capture_output=True, text=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        pytest.skip(f"pass-3 outputs ({PASS3_COMMIT}) not available from git")
-    return pd.read_csv(StringIO(text))
+def _pass3(name: str, fixtures: Path = PASS3_FIXTURES) -> pd.DataFrame:
+    """A stored pass-3 reference table; a missing fixture fails the test (never skips)."""
+    path = fixtures / name
+    if not path.is_file():
+        pytest.fail(f"pass-3 fixture {path} missing (extracted from {PASS3_COMMIT}; docs/progress.md, pass 5)")
+    return pd.read_csv(path)
+
+
+def test_a_missing_pass3_fixture_fails_the_regression_test(tmp_path):
+    with pytest.raises(pytest.fail.Exception, match="fixture .* missing"):
+        _pass3("model_fit_selected.csv", fixtures=tmp_path)
+    for name in ("model_fit_selected.csv", "model_identifiability.csv", "nh4_truth_summary.csv",
+                 "nh4_truth_vectors.csv", "pulses_model_based.csv"):
+        assert not _pass3(name).empty
 
 
 def test_real_selection_fit_and_model_based_numbers_equal_pass3(run_all_dir):
     """Regression (Step 1): no fitted value of the selected model, no selection and no MODEL-BASED number changes."""
     tab = run_all_dir / "tables"
-    new, old = pd.read_csv(tab / "model_fit.csv"), _pass3("model_fit.csv")
+    new, old = pd.read_csv(tab / "model_fit.csv"), _pass3("model_fit_selected.csv")
     assert new.loc[new["selected"], "model"].tolist() == old.loc[old["selected"], "model"].tolist()
     sel = new.loc[new["selected"], "model"].iloc[0]
     cols = ["cal_rmse_log", "cal_start", "sel_skill_vs_null", "test_skill_vs_null", "forecast_skill_vs_null",
@@ -310,7 +318,7 @@ def test_real_selection_fit_and_model_based_numbers_equal_pass3(run_all_dir):
     pd.testing.assert_frame_equal(new.set_index("model").loc[[sel], cols], old.set_index("model").loc[[sel], cols])
     for name in ("model_identifiability.csv", "nh4_truth_summary.csv", "nh4_truth_vectors.csv"):
         pd.testing.assert_frame_equal(pd.read_csv(tab / name), _pass3(name))
-    pm, pm_old = pd.read_csv(tab / "pulses.csv"), _pass3("pulses.csv")
+    pm, pm_old = pd.read_csv(tab / "pulses.csv"), _pass3("pulses_model_based.csv")
     key = ["pulse", "metric"]
     mb = pm[pm["metric"].str.contains("MODEL_BASED")].set_index(key).sort_index()
     mb_old = pm_old[pm_old["metric"].str.contains("MODEL_BASED")].set_index(key).sort_index()
