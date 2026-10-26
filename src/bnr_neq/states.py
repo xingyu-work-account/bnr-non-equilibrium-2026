@@ -11,7 +11,9 @@ Every 0.01 d grid bin from day 1 is assigned one of
 - ``unclassified``: a slope window crosses an artifact or event, or the indicators conflict or stay inside thresholds.
 
 The rules, windows and thresholds below were fixed from sensor resolution and physical scales before any state was
-computed or compared (``RULES``, ``rules_table``); they are not tuned on the outcome. A slope is rising, falling or
+computed or compared (``RULES``, ``rules_table``), but two parts were revised after the first results (the ≥ 2 blocks
+rule and the autocorrelation-widened intervals, ``REGISTRATION_STATUS``); they are frozen by ``registration_sha256``
+from pass 6 and are not pre-registered. A slope is rising, falling or
 flat by its Theil-Sen 95 % interval over the centred 1.01 d window, widened for autocorrelation (pass 3, X2): each
 half-width is multiplied by √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ the lag-1 autocorrelation of the window's
 residuals about its Theil-Sen line (capped at 0.999), the formula of ``model.effective_n``; the same for C(t), pH and
@@ -48,6 +50,7 @@ PH_QUANTUM = 0.01  # pH logger resolution (tie fractions 0.82-0.96 in M1)
 # Relative ORP threshold: one decade of p_O2 moves a Nernstian 4-electron O2/H2O couple by RT ln10/(4F) ≈ 14.8 mV at
 # 25 °C (SCENARIO temperature). Rounded to 15 mV. Pt in water is not strictly Nernstian; this only fixes the scale.
 ORP_LEVEL_MV = round(1e3 * R_J_PER_MOL_K * T_REF_K * math.log(10) / (4 * F_C_PER_MOL))
+ORP_THRESHOLD_SCENARIO = "SCENARIO 25 °C: RT ln10/(4F) at 298.15 K = 14.8 mV, rounded; the liquid temperature is not measured"
 ORP_REF_HALF_BINS = 250  # centred 5 d reference median: relative level, insensitive to slow reference drift
 ORP_REF_MIN_BINS = 100
 ORP_EVENTS_D = (28.89, 30.48)  # dynamics.ORP_ELECTRODE_EVENTS_D (implementation_prompt.md M5 item 3)
@@ -75,7 +78,7 @@ class StateRuleError(ValueError):
     """A state rule uses a sensor feature that the sensor validation excluded."""
 
 
-# --- Pre-registered rules --------------------------------------------------------------------------------------
+# --- Registered rules (revised after first results; see REGISTRATION_STATUS) -----------------------------------
 # Features: nh4_inverted = slope of the W1 C(t) (the observation model absorbs the electrode under-response);
 # ph = pH slope (pH PASSED M2); orp_relative = ORP minus its centred 5 d median and the ORP slope (the M2 failure
 # concerns the bare-Ag reference potential: absolute E_H is excluded, relative changes over days are kept as an
@@ -101,6 +104,53 @@ INDICATOR_PARTITIONS = {
     "ORP_rel low vs high": ("orp_low", "orp_high"),
     "pH rising vs not rising": ("ph_rising", "ph_not_rising"),
 }
+
+
+# --- Registration (pass 6, G1) ----------------------------------------------------------------------------------
+# The rules were fixed before the first states were computed, but they landed in git together with their first
+# results, and two parts changed after results existed: the ≥ 2 blocks rule (pass 2, after the first comparison) and
+# the autocorrelation-widened slope intervals (pass 3, X2). They are therefore not pre-registered. From pass 6 every
+# parameter and decision function of the classifier and of the association test is frozen by one SHA-256, recorded in
+# REGISTRATION_DOC and checked by a test; any change to them changes the hash and must be re-registered there.
+REGISTRATION_DOC = "docs/states_registration.md"
+REGISTRATION_STATUS = ("REVISED AFTER FIRST RESULTS (not pre-registered): the >= 2 blocks rule was added after the "
+                       "first comparison (pass 2) and the slope intervals were widened for autocorrelation after the "
+                       "first states (pass 3, X2); rules frozen by SHA-256 from pass 6 (" + REGISTRATION_DOC + ")")
+_REGISTERED_FUNCTIONS = ("artifact_reasons", "lag1_rho", "interval_scale", "rolling_theil_sen", "relative_orp",
+                         "window_median", "sign_class", "features", "classify", "acf_block_length",
+                         "block_bootstrap_diff", "indicator_groups", "comparisons",
+                         # G2: the null check of the bootstrap, frozen before it was run on the record
+                         "ar1", "null_response", "bootstrap_null_coverage", "null_coverage", "interval_reading")
+
+
+def registration() -> dict:
+    """Canonical form of everything that decides a state or the association test (parameters and function sources)."""
+    import inspect
+    import sys
+
+    mod = sys.modules[__name__]
+    return {
+        "rules": [[r.state, r.condition, list(r.features)] for r in RULES],
+        "parameters": {"T0_D": T0_D, "END_D": END_D, "BIN_D": BIN_D, "SLOPE_HALF_BINS": SLOPE_HALF_BINS,
+                       "PH_QUANTUM": PH_QUANTUM, "ORP_LEVEL_MV": ORP_LEVEL_MV, "ORP_REF_HALF_BINS": ORP_REF_HALF_BINS,
+                       "ORP_REF_MIN_BINS": ORP_REF_MIN_BINS, "ORP_EVENTS_D": list(ORP_EVENTS_D),
+                       "ORP_EVENT_MARGIN_D": list(ORP_EVENT_MARGIN_D), "CI_ALPHA": CI_ALPHA, "RHO_MAX": RHO_MAX,
+                       "N_BOOT": N_BOOT, "MIN_BLOCKS_PER_GROUP": MIN_BLOCKS_PER_GROUP, "SEED": SEED,
+                       "EXCLUDE_AFTER_BOUNDARY_D": S.EXCLUDE_AFTER_BOUNDARY_D,
+                       "NULL_COVERAGE_PHIS": list(NULL_COVERAGE_PHIS),
+                       "NULL_COVERAGE_REPLICATES": NULL_COVERAGE_REPLICATES,
+                       "NULL_COVERAGE_MIN_OK": NULL_COVERAGE_MIN_OK, "COVERAGE_BURN_IN": COVERAGE_BURN_IN},
+        "excluded_by_fail": {k: list(v) for k, v in EXCLUDED_BY_FAIL.items()},
+        "indicator_partitions": {k: list(v) for k, v in INDICATOR_PARTITIONS.items()},
+        "functions": {name: inspect.getsource(getattr(mod, name)) for name in _REGISTERED_FUNCTIONS},
+    }
+
+
+def registration_sha256() -> str:
+    import hashlib
+    import json
+
+    return hashlib.sha256(json.dumps(registration(), sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()
 
 
 def excluded_features(verdicts: pd.DataFrame) -> set[str]:
@@ -130,8 +180,11 @@ def rules_table(excluded: set[str]) -> pd.DataFrame:
                         "half-widths x √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the window "
                         f"residuals, capped at {RHO_MAX}; C(t), pH and ORP alike); "
                         f"pH rising/falling also needs |slope| x window ≥ {PH_QUANTUM} (one quantum); ORP_rel level "
-                        f"±{ORP_LEVEL_MV} mV against the centred {2 * ORP_REF_HALF_BINS * BIN_D:g} d median")
+                        f"±{ORP_LEVEL_MV} mV against the centred {2 * ORP_REF_HALF_BINS * BIN_D:g} d median "
+                        f"({ORP_THRESHOLD_SCENARIO})")
     df["excluded_features"] = ", ".join(sorted(excluded)) or "none"
+    df["registration_sha256"] = registration_sha256()
+    df["registration_status"] = REGISTRATION_STATUS
     return df.drop(columns=["order"])
 
 
@@ -182,7 +235,7 @@ def rolling_theil_sen(t: np.ndarray, y: np.ndarray, clean: np.ndarray, half: int
 
     scipy's interval treats the 2 half + 1 points as independent; each half-width (below and above the slope) is
     multiplied by √(n/n_eff), n_eff = n (1 − ρ)/(1 + ρ), ρ = lag-1 autocorrelation of the residuals about the window's
-    own Theil-Sen line (pre-registered in pass 3, X2)."""
+    own Theil-Sen line (added in pass 3, X2, after the first states had been computed)."""
     n = len(t)
     out = np.full((4, n), np.nan)
     bad = np.concatenate([[0], np.cumsum(~clean | ~np.isfinite(y))])
@@ -317,7 +370,7 @@ def features(grid: pd.DataFrame, truth: pd.DataFrame, reason: np.ndarray) -> pd.
 
 # --- Classification --------------------------------------------------------------------------------------------
 def classify(f: pd.DataFrame) -> pd.DataFrame:
-    """Apply the pre-registered rules, in order, to the feature table (adds ``state`` and ``state_reason``)."""
+    """Apply the registered rules, in order, to the feature table (adds ``state`` and ``state_reason``)."""
     n = len(f)
     state = np.full(n, UNCLASSIFIED, dtype=object)
     why = np.full(n, "", dtype=object)
@@ -512,6 +565,98 @@ def comparisons(bins: pd.DataFrame, cfg: Config) -> pd.DataFrame:
                      "role": "DESCRIPTIVE (circular: the states are defined with the NH4 slope)", **r})
     out = pd.DataFrame(rows)
     out["response"] = "NH4 consumption −dC/dt of the M6-inverted C(t), 1.01 d Theil-Sen (mg N/L/d)"
+    out["registration_sha256"] = registration_sha256()
+    out["registration_status"] = REGISTRATION_STATUS
+    return out
+
+
+# --- Null coverage of the block bootstrap (pass 6, G2) ---------------------------------------------------------
+# Fixed before the check was run: the record's own eligible bins and group labels, a response with no group effect
+# built like the real one (the 2 half + 1 bin least-squares slope of AR(1) noise, so neighbouring values share all but
+# one bin), the registered block rule and N_BOOT. An interval is read as adequate only if it covers the true
+# difference 0 in at least NULL_COVERAGE_MIN_OK of the replicates at every φ; the block rule is not changed by it.
+NULL_COVERAGE_PHIS = COVERAGE_PHIS
+NULL_COVERAGE_REPLICATES = 200
+NULL_COVERAGE_MIN_OK = 0.90
+NULL_COVERAGE_COLUMNS = ("comparison", "phi", "n_replicates", "n_computed", "coverage_of_zero", "nominal",
+                         "block_bins_median", "basis")
+
+
+def null_response(n: int, phi: float, seed: int, half: int = SLOPE_HALF_BINS) -> np.ndarray:
+    """n values of the centred (2 half + 1)-point least-squares slope of AR(1) noise: no group effect, overlap as in the
+    real response."""
+    w = np.arange(-half, half + 1, dtype=float)
+    w /= w @ w
+    x = ar1(n + 2 * half + COVERAGE_BURN_IN, phi, seed)[COVERAGE_BURN_IN:]
+    return np.convolve(x, w[::-1], mode="valid")
+
+
+def bootstrap_null_coverage(group_a: np.ndarray, group_b: np.ndarray, strata: np.ndarray | None = None,
+                            phis=NULL_COVERAGE_PHIS, n_rep: int = NULL_COVERAGE_REPLICATES, n_boot: int = N_BOOT,
+                            seed: int = SEED, min_block: int = 2 * SLOPE_HALF_BINS + 1) -> list[dict]:
+    """Coverage of the true difference 0 by ``block_bootstrap_diff`` (registered block rule) on synthetic responses
+    with the given group labels; one row per φ."""
+    rng = np.random.default_rng(seed)
+    n = len(group_a)
+    rows = []
+    for phi in phis:
+        hits = done = 0
+        blocks = []
+        for _ in range(n_rep):
+            y = null_response(n, phi, int(rng.integers(1 << 31)))
+            block = acf_block_length(y, min_block)
+            r = block_bootstrap_diff(y, group_a, group_b, block, n_boot=n_boot, seed=int(rng.integers(1 << 31)),
+                                     strata=strata)
+            if r["status"] != "computed":
+                continue
+            done += 1
+            hits += r["ci95_low"] <= 0.0 <= r["ci95_high"]
+            blocks.append(block)
+        rows.append({"phi": phi, "n_replicates": n_rep, "n_computed": done,
+                     "coverage_of_zero": hits / done if done else np.nan, "nominal": CI_ALPHA,
+                     "block_bins_median": float(np.median(blocks)) if blocks else np.nan})
+    return rows
+
+
+def null_coverage(bins: pd.DataFrame, comp: pd.DataFrame, cfg: Config, **kw) -> pd.DataFrame:
+    """G2: the null coverage of every computed comparison, with the eligible bins and groups of ``comparisons``."""
+    ok = (bins["artifact_reason"] == "") & bins["nh4_slope_mgN_L_d"].notna() & bins["orp_rel_window_median_mV"].notna() \
+        & bins["ph_sign"].notna()
+    b = bins[ok].reset_index(drop=True)
+    strata = np.searchsorted(np.asarray(cfg.pulse_times_d), b["t_mid_d"].to_numpy(), side="right")
+    g = indicator_groups(b)
+    st = b["state"].to_numpy()
+    rows = []
+    for r in comp[comp["status"] == "computed"].itertuples(index=False):
+        ga, gb = (g[r.group_a], g[r.group_b]) if r.group_a in g else (st == r.group_a, st == r.group_b)
+        stv = strata if "within pulse intervals" in r.comparison else None
+        for row in bootstrap_null_coverage(ga, gb, stv, **kw):
+            rows.append({"comparison": r.comparison, **row})
+    out = pd.DataFrame(rows, columns=list(NULL_COVERAGE_COLUMNS[:-1]))
+    out["basis"] = (f"SYNTHETIC null: the record's eligible bins and group labels, response = {2 * SLOPE_HALF_BINS + 1}-bin "
+                    "least-squares slope of AR(1) noise (no group effect), registered block rule and resamples, fixed "
+                    "seed; eligible bins treated as contiguous")
+    return out
+
+
+def interval_reading(comp: pd.DataFrame, cov: pd.DataFrame) -> pd.DataFrame:
+    """Adds ``null_coverage_min`` and ``interval_reading`` (decided by NULL_COVERAGE_MIN_OK) to the comparison table."""
+    worst = cov.groupby("comparison")["coverage_of_zero"].min() if len(cov) else pd.Series(dtype=float)
+    out = comp.copy()
+    out["null_coverage_min"] = out["comparison"].map(worst)
+
+    def reading(row):
+        if row["status"] != "computed":
+            return "no interval"
+        c = row["null_coverage_min"]
+        if not np.isfinite(c):
+            return "not checked: no computed null replicate"
+        if c >= NULL_COVERAGE_MIN_OK:
+            return f"adequate on the synthetic null (coverage of 0 ≥ {NULL_COVERAGE_MIN_OK:g} at every φ)"
+        return (f"UNDER-COVERS on the synthetic null (coverage of 0 down to {c:.2f} < {NULL_COVERAGE_MIN_OK:g}): the "
+                "interval is too narrow; an interval excluding 0 is not evidence of a difference")
+
+    out["interval_reading"] = out.apply(reading, axis=1)
     return out
 
 
@@ -531,7 +676,8 @@ STATE_TABLE_COLUMNS = {
                    "fraction_unclassified", "n_classified", "n_inactive_oversupplied", "classified_fraction",
                    "idle_fraction_lower_bound", "idle_fraction_upper_bound", "bounds_status",
                    "idle_fraction_of_classified_time", "status", "median_nh4_slope_resid_lag1")),
-    "comparisons": (("comparison", "group_a", "group_b", "role", "response"),
+    "comparisons": (("comparison", "group_a", "group_b", "role", "response", "registration_sha256",
+                     "registration_status", "null_coverage_min", "interval_reading"),
                     ("diff", "ci95_low", "ci95_high", "n_a", "n_b", "block_bins", "n_strata", "n_boot_valid", "status")),
 }
 COVERAGE_COLUMNS = ("phi", "n_points", "n_windows", "nominal", "coverage_unscaled", "coverage_scaled_estimated_rho",
@@ -547,6 +693,7 @@ class StateResult:
     rules: pd.DataFrame
     excluded: set = field(default_factory=set)
     coverage: pd.DataFrame | None = None  # Y3: synthetic check of the slope interval
+    null_coverage: pd.DataFrame | None = None  # G2: synthetic null check of the block bootstrap
 
 
 def compute(cfg: Config, inputs: dict) -> StateResult:
@@ -562,13 +709,18 @@ def compute(cfg: Config, inputs: dict) -> StateResult:
     # X3: every table carrying C(t) quantities (slopes, consumption, states built on them) declares its NH4 basis
     prov = {"nh4_observation_model": str(inputs["truth"]["nh4_observation_model"].iloc[0]),
             "nh4_series": str(inputs["truth"]["nh4_truth_id"].iloc[0])}
-    out = [x.assign(**prov) for x in (bins, timeline(bins), fr, comparisons(bins, cfg))]
+    comp = comparisons(bins, cfg)
+    null = null_coverage(bins, comp, cfg)
+    comp = interval_reading(comp, null)
+    out = [x.assign(**prov) for x in (bins, timeline(bins), fr, comp)]
     for x, name in zip(out, ("bins", "timeline", "fractions", "comparisons")):
         indep, derived = STATE_TABLE_COLUMNS[name]
         model.check_single_observation_model(x, label_cols=(), independent_cols=indep, derived_cols=derived)
     cov = interval_coverage().assign(nh4_observation_model=model.NH4_INDEPENDENT, nh4_series="")
     model.check_single_observation_model(cov, label_cols=(), independent_cols=COVERAGE_COLUMNS)
-    return StateResult(*out, rules_table(excluded), excluded, cov)
+    null = null.assign(nh4_observation_model=model.NH4_INDEPENDENT, nh4_series="")
+    model.check_single_observation_model(null, label_cols=(), independent_cols=NULL_COVERAGE_COLUMNS)
+    return StateResult(*out, rules_table(excluded), excluded, cov, null)
 
 
 def load_inputs(out_dir: Path) -> dict:
@@ -593,9 +745,11 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
         "",
         "Generated by `python -m bnr_neq states`. Do not edit by hand. Implementer output, not approved.",
         "",
-        "## Pre-registered rules",
+        "## Registered rules (revised after first results; not pre-registered)",
         "",
-        ("Fixed from sensor resolution and physical scales before any state was computed (see `states.py`). Rules are "
+        (f"Fixed from sensor resolution and physical scales before any state was computed (see `states.py`), then "
+         f"revised after the first results: {REGISTRATION_STATUS}. SHA-256 of the rules, parameters and decision "
+         f"functions: `{registration_sha256()}`. Rules are "
          "applied in order; a bin flagged by QC carries no process state. Excluded sensor features (from the M2 "
          f"verdicts): {', '.join(sorted(r.excluded)) or 'none'}; a rule that used one would raise."),
         "",
@@ -632,6 +786,16 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
         "",
         md_table(r.comparisons, digits=3),
         "",
+        (f"Synthetic null check of these intervals (pass 6, G2; `states_bootstrap_null_coverage.csv`): the record's "
+         f"eligible bins and group labels with a response that has no group effect ({NULL_COVERAGE_REPLICATES} "
+         f"replicates per φ; {2 * SLOPE_HALF_BINS + 1}-bin least-squares slope of AR(1) noise), the registered block "
+         f"rule and {N_BOOT} resamples. An interval is read as adequate only if it covers 0 in at least "
+         f"{NULL_COVERAGE_MIN_OK:g} of the replicates at every φ (`interval_reading`); the block rule is not changed by "
+         "this check."),
+        "",
+        md_table(r.null_coverage.drop(columns=["nh4_observation_model", "nh4_series", "basis"]), digits=3)
+        if r.null_coverage is not None and len(r.null_coverage) else "No computed comparison to check.",
+        "",
         "## State timeline (time-ordered runs)",
         "",
         md_table(r.timeline[r.timeline["duration_d"] >= 0.1], digits=3),
@@ -654,5 +818,6 @@ def run(cfg: Config, out_dir) -> StateResult:
     r.comparisons.to_csv(d["tables"] / "states_comparison.csv", index=False)
     r.rules.to_csv(d["tables"] / "states_rules.csv", index=False)
     r.coverage.to_csv(d["tables"] / "states_interval_coverage.csv", index=False)
+    r.null_coverage.to_csv(d["tables"] / "states_bootstrap_null_coverage.csv", index=False)
     write_report(cfg, r, d["reports"] / "states.md")
     return r
