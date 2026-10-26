@@ -1,0 +1,5 @@
+pulse,orp_obs_change_mV,ph_obs_change,oxide_scenario_pred_orp_change_mV_SCENARIO_T25C,e_ref_measured_chloride_V,orp_post_median_mV_vs_Ag,eh_absolute
+1,0.4000000000000057,-0.0099999999999997,-0.5915934968571974,not computed: chloride_mmol_L missing,193.9,not computed: S4
+2,0.0,0.0199999999999995,1.1831869937144008,not computed: chloride_mmol_L missing,195.5,not computed: S4
+3,0.125,0.0,0.0,not computed: chloride_mmol_L missing,112.4,not computed: S4
+4,0.2099999999999795,0.04,2.3663739874288607,not computed: chloride_mmol_L missing,169.2,not computed: S4

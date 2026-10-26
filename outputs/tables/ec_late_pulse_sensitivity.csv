@@ -1,0 +1,7 @@
+threshold_mS_cm,n_pulses,rule
+0.03440578849999998,29,noise floor (used)
+0.02,35,sensitivity
+0.03,33,sensitivity
+0.04,28,sensitivity
+0.05,27,sensitivity
+0.06,27,sensitivity

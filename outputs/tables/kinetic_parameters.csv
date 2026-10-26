@@ -1,0 +1,51 @@
+segment,model,parameter,estimate,relative_se,identifiable,reason
+0,zero_order,k0_mgN_L_d,0.014059566198831586,8.321509014521956,False,relative SE 8.3 > 1.0
+0,first_order,k1_per_d,0.02118290284612808,0.2304202329293428,True,
+0,monod,vmax_mgN_L_d,212.09903336837203,259.43166545947264,False,relative SE 2.6e+02 > 1.0
+0,monod,Ks_mgN_L,9999.997545067787,260.21792799732276,False,at bound; relative SE 2.6e+02 > 1.0
+0,haldane_FA_SCENARIO_T20C,vmax_mgN_L_d,9967.384273807405,16678.732653898995,False,relative SE 1.7e+04 > 1.0; ill-conditioned
+0,haldane_FA_SCENARIO_T20C,Ks_mgNH3_L,2071.400712868973,16679.800404707374,False,relative SE 1.7e+04 > 1.0; ill-conditioned
+0,haldane_FA_SCENARIO_T20C,Ki_mgNH3_L,3141.8137081253994,35.46848776810608,False,relative SE 35 > 1.0; ill-conditioned
+0,haldane_FA_SCENARIO_T25C,vmax_mgN_L_d,9991.566562895796,16346.18139912505,False,at bound; relative SE 1.6e+04 > 1.0; ill-conditioned
+0,haldane_FA_SCENARIO_T25C,Ks_mgNH3_L,2978.2436439208313,16347.232105272931,False,relative SE 1.6e+04 > 1.0; ill-conditioned
+0,haldane_FA_SCENARIO_T25C,Ki_mgNH3_L,828.6362871113819,82.79407438922513,False,relative SE 83 > 1.0; ill-conditioned
+1,zero_order,k0_mgN_L_d,1.8616885030687302,0.13041114726942846,True,
+1,first_order,k1_per_d,0.045126122276656626,0.13275041280945574,True,
+1,monod,vmax_mgN_L_d,1.8616879271028794,0.13097698202148145,False,ill-conditioned
+1,monod,Ks_mgN_L,3.3905136121292854e-06,1.230373964842268e-08,False,ill-conditioned
+1,haldane_FA_SCENARIO_T20C,vmax_mgN_L_d,9969.088023162283,48141.816145279554,False,relative SE 4.8e+04 > 1.0; ill-conditioned
+1,haldane_FA_SCENARIO_T20C,Ks_mgNH3_L,0.001088376987266947,428.5179906456267,False,relative SE 4.3e+02 > 1.0; ill-conditioned
+1,haldane_FA_SCENARIO_T20C,Ki_mgNH3_L,3.757552198338277e-05,48151.083610818016,False,relative SE 4.8e+04 > 1.0; ill-conditioned
+1,haldane_FA_SCENARIO_T25C,vmax_mgN_L_d,9955.575148361058,49052.123758693095,False,relative SE 4.9e+04 > 1.0; ill-conditioned
+1,haldane_FA_SCENARIO_T25C,Ks_mgNH3_L,2.799364985359252e-05,168.35390882032289,False,relative SE 1.7e+02 > 1.0; ill-conditioned
+1,haldane_FA_SCENARIO_T25C,Ki_mgNH3_L,5.399392437463291e-05,49061.522438449516,False,relative SE 4.9e+04 > 1.0; ill-conditioned
+2,zero_order,k0_mgN_L_d,0.9980209832624043,0.02522349381133643,True,
+2,first_order,k1_per_d,0.0271053354878447,0.017299416790359894,True,
+2,monod,vmax_mgN_L_d,272.239588192653,17.74394074627255,False,relative SE 18 > 1.0
+2,monod,Ks_mgN_L,9999.999972677972,17.827588914153896,False,at bound; relative SE 18 > 1.0
+2,haldane_FA_SCENARIO_T20C,vmax_mgN_L_d,9999.87795573439,444.90165295702053,False,at bound; relative SE 4.4e+02 > 1.0; ill-conditioned
+2,haldane_FA_SCENARIO_T20C,Ks_mgNH3_L,2.7232798119862066e-05,0.12577071907838325,False,ill-conditioned
+2,haldane_FA_SCENARIO_T20C,Ki_mgNH3_L,5.345209449662774e-05,444.9679468028454,False,relative SE 4.4e+02 > 1.0; ill-conditioned
+2,haldane_FA_SCENARIO_T25C,vmax_mgN_L_d,9999.999678392312,447.6374585156086,False,at bound; relative SE 4.5e+02 > 1.0; ill-conditioned
+2,haldane_FA_SCENARIO_T25C,Ks_mgNH3_L,3.5127611032504915e-06,0.041842158629857115,False,ill-conditioned
+2,haldane_FA_SCENARIO_T25C,Ki_mgNH3_L,7.650963403473544e-05,447.7038437749778,False,relative SE 4.5e+02 > 1.0; ill-conditioned
+3,zero_order,k0_mgN_L_d,0.40313631290661023,0.02390518088451658,True,
+3,first_order,k1_per_d,0.009739322766452063,0.023909664242558856,True,
+3,monod,vmax_mgN_L_d,1.177456897750299,7.290603753712982,False,relative SE 7.3 > 1.0
+3,monod,Ks_mgN_L,79.48939075596775,11.087512820798295,False,relative SE 11 > 1.0
+3,haldane_FA_SCENARIO_T20C,vmax_mgN_L_d,3138.6156184491397,54122.538626550035,False,relative SE 5.4e+04 > 1.0; ill-conditioned
+3,haldane_FA_SCENARIO_T20C,Ks_mgNH3_L,5011.116712429209,54125.94778697518,False,relative SE 5.4e+04 > 1.0; ill-conditioned
+3,haldane_FA_SCENARIO_T20C,Ki_mgNH3_L,0.0011512982450621848,54169.96320639523,False,relative SE 5.4e+04 > 1.0; ill-conditioned
+3,haldane_FA_SCENARIO_T25C,vmax_mgN_L_d,4373.910202549212,50011.20305405741,False,relative SE 5e+04 > 1.0; ill-conditioned
+3,haldane_FA_SCENARIO_T25C,Ks_mgNH3_L,9999.961325469001,50013.64986695189,False,at bound; relative SE 5e+04 > 1.0; ill-conditioned
+3,haldane_FA_SCENARIO_T25C,Ki_mgNH3_L,0.0012103229375661528,50041.17717681789,False,relative SE 5e+04 > 1.0; ill-conditioned
+4,zero_order,k0_mgN_L_d,0.21745455745889505,0.03536684871386616,True,
+4,first_order,k1_per_d,0.005629313781560686,0.040803031719775375,True,
+4,monod,vmax_mgN_L_d,0.21745455599749577,0.035378521834615526,False,ill-conditioned
+4,monod,Ks_mgN_L,1.918210411727754e-06,1.7959132424560393e-09,False,ill-conditioned
+4,haldane_FA_SCENARIO_T20C,vmax_mgN_L_d,9999.283248437061,13402.758966879113,False,at bound; relative SE 1.3e+04 > 1.0; ill-conditioned
+4,haldane_FA_SCENARIO_T20C,Ks_mgNH3_L,6.094873339180084e-06,0.0,False,ill-conditioned
+4,haldane_FA_SCENARIO_T20C,Ki_mgNH3_L,7.763947658046167e-06,13403.077161057723,False,relative SE 1.3e+04 > 1.0; ill-conditioned
+4,haldane_FA_SCENARIO_T25C,vmax_mgN_L_d,9999.433108468427,15340.275987794035,False,at bound; relative SE 1.5e+04 > 1.0; ill-conditioned
+4,haldane_FA_SCENARIO_T25C,Ks_mgNH3_L,1.0822259672020596e-06,0.42590520898807077,False,ill-conditioned
+4,haldane_FA_SCENARIO_T25C,Ki_mgNH3_L,1.111678591111422e-05,15340.63428378398,False,relative SE 1.5e+04 > 1.0; ill-conditioned

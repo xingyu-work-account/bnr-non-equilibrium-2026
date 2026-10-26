@@ -1,0 +1,5 @@
+sensor,file,header_found,header_section4,header_matches_section4,rows_read,rows_valid,rows_dropped,t_min_d,t_max_d,value_column,value_min,value_max,interval_median_s,interval_min_s,interval_max_s,stamp_rows_min,stamp_rows_max,stamp_rows_interior_min,n_stamps,EC_min_mS_cm,EC_max_mS_cm,tie_fraction
+cond,Cond.csv,"Time(d),Conductivity(A)","Time, d,Cond. A",False,71760,71759,1,0.000692521,49.69459834,I_A,-0.366,-0.05946,59.83372800010329,59.83372799948938,59.83459200017478,,,,,0.693217783,1.5817393000000002,0.11345076507149028
+nh4,NH4.csv,"Time(d),Concentration(mg/L)","Time(d),Concentration",False,414785,414785,0,0.0,47.92,nh4_mgNH4_L,9.52,75.13,3.031578947275193,1.919999999859101,39.27272727272737,22.0,450.0,42.0,4793.0,,,0.5258881731214319
+orp,ORP.csv,"Time(d),ORP(mV)","Time,ORP (mV)",False,459884,459884,0,0.0,53.23,orp_mV_vs_Ag,77.96,318.7,10.046511627683685,9.931034482474388,41.142857142995126,21.0,87.0,86.0,5324.0,,,0.4817942824587993
+ph,pH.csv,"Time(d),pH","Time(d),pH",True,414757,414757,0,0.0,48.00439815,pH,6.47,8.02,9.999936000002663,9.999935999849185,20.000044800019623,,,,,,,0.884018555488046

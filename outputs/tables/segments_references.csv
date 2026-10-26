@@ -1,0 +1,14 @@
+quantity,reference,obtained,tolerance,abs_diff,pass,note
+slope_mgNH4_L_d 0.3-2.59 (production sub-segment),-1.89,-1.6714314281353952,0.189,0.21856857186460465,False,fit window 1.100 to 2.625 d; exact window gives -1.914
+slope_mgNH4_L_d 2.59-8.82 (production sub-segment),-3.42,0.9918376801799811,0.342,4.411837680179981,False,fit window 6.647 to 8.530 d; exact window gives -3.406
+slope_mgNH4_L_d 10.85-17.84 (production sub-segment),-1.95,-1.9387801801211684,0.195,0.011219819878831583,True,fit window 10.983 to 17.875 d; exact window gives -1.951
+slope_mgNH4_L_d 17.84-24.6 (production sub-segment),-0.57,-0.5783521800896261,0.056999999999999995,0.008352180089626127,True,fit window 17.975 to 24.590 d; exact window gives -0.573
+slope_mgNH4_L_d 24.6-32.36 (production sub-segment),-0.48,-0.4836535220761677,0.05,0.0036535220761677034,True,fit window 24.765 to 32.390 d; exact window gives -0.480
+slope_mgNH4_L_d 32.36-37.19 (production sub-segment),-0.31,-0.2962554197871609,0.05,0.013744580212839086,True,fit window 32.496 to 37.219 d; exact window gives -0.304
+slope_mgNH4_L_d 37.19-44.63 (production sub-segment),-0.28,-0.2831880173433241,0.05,0.003188017343324079,True,fit window 37.319 to 44.660 d; exact window gives -0.282
+slope_mgNH4_L_d 44.63-47.92 (production sub-segment),0.12,0.12560796645695163,0.05,0.005607966456951635,True,fit window 44.760 to 47.920 d; exact window gives 0.115
+consumption_SENSITIVITY_linear_gain_mgN_L_d after pulse 2,5.2,5.191075258495138,0.52,0.008924741504862332,True,sub-segment 18 (10.983 to 17.875 d); tolerance: 10 % (reference says 'about')
+consumption_SENSITIVITY_linear_gain_mgN_L_d after pulse 4,1.4,1.3193395658825615,0.13999999999999999,0.0806604341174384,True,sub-segment 23 (32.496 to 37.219 d); tolerance: 10 % (reference says 'about')
+"free ammonia min, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis)",0.7,0.7016289258117225,0.05,0.0016289258117225813,True,range of sub-segment medians; tolerance: rounding of the reference to 0.1
+"free ammonia max, day 17.84-32.36, 20/25 C SCENARIOS (mg NH3/L; SENSITIVITY: reading as TAN, as in the preliminary analysis)",1.2,1.168051300865198,0.05,0.03194869913480192,True,range of sub-segment medians; tolerance: rounding of the reference to 0.1
+max Lomb-Scargle normalized power (periodicity band),0.05,0.0515723146541799,0.01,0.001572314654179896,True,ORP at 0.346 c/d; full band max 0.628; tolerance: 0.01 (reference says 'about')

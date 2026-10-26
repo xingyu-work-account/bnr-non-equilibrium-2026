@@ -1,0 +1,34 @@
+term,value,unit,basis,volume_scenario
+"Alkalinity, sampling time not recorded (alkalinity_mmol_L)",not computed: alkalinity_mmol_L missing,mmol/L,,constant volume (closed-frame assumption)
+Initial alkalinity (W2 key),not computed: initial_alkalinity_meq_L missing,meq/L,,constant volume (closed-frame assumption)
+Alk0 used by the W2 bound,not computed: initial_alkalinity_meq_L missing; only the 1-15 meq/L scan is reported,,W2: alkalinity_bound.csv,constant volume (closed-frame assumption)
+Consumed per fully nitrified pulse,467.41498569852865,mg CaCO3/L,7.14 g CaCO3 per g N,constant volume (closed-frame assumption)
+Consumed per fully nitrified pulse,9.340827052328711,meq/L,,constant volume (closed-frame assumption)
+Consumed if all added N were nitrified,1869.6599427941146,mg CaCO3/L,upper bound from the dose,constant volume (closed-frame assumption)
+Consumed if all added N were nitrified,37.363308209314845,meq/L,,constant volume (closed-frame assumption)
+Consumed if the electrode-implied removal were nitrified,1891.2266419481145,mg CaCO3/L,conditional on the uncorrected electrode balance,constant volume (closed-frame assumption)
+Remaining alkalinity,not computed: alkalinity_mmol_L missing,mmol/L,,constant volume (closed-frame assumption)
+CO2 supersaturation Ω_CO2,not computed: alkalinity_mmol_L missing,-,,constant volume (closed-frame assumption)
+"Consumed if all added N were nitrified, concentration at the end",42.386055824520525,meq/L,amount per initial litre x V0/V_end,SCENARIO evaporation 0.25 mL/d
+"Consumed if all added N were nitrified, concentration at the end",48.96894916030779,meq/L,amount per initial litre x V0/V_end,SCENARIO evaporation 0.5 mL/d
+"Consumed if all added N were nitrified, concentration at the end",71.03290534090274,meq/L,amount per initial litre x V0/V_end,SCENARIO evaporation 1 mL/d
+Minimum initial alkalinity that can hold the observed pH (air-equilibrium CO2),0.6434654841366978,meq/L,W2: max over t of Alk_min(pH(t)) V(t)/V0; SCENARIO 25 °C,constant volume (closed-frame assumption)
+"Upper bound on cumulative nitrification by the end, Alk0 = 2 meq/L",13.009538747950954,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",constant volume (closed-frame assumption)
+"Upper bound on cumulative nitrification by the end, Alk0 = 5 meq/L",34.020038747950956,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",constant volume (closed-frame assumption)
+"Upper bound on cumulative nitrification by the end, Alk0 = 10 meq/L",69.03753874795096,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",constant volume (closed-frame assumption)
+"Upper bound on cumulative nitrification by the end, Alk0 = 15 meq/L",104.05503874795096,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",constant volume (closed-frame assumption)
+Minimum initial alkalinity that can hold the observed pH (air-equilibrium CO2),0.6079703193680073,meq/L,W2: max over t of Alk_min(pH(t)) V(t)/V0; SCENARIO 25 °C,SCENARIO evaporation 0.25 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 2 meq/L",13.12902213768078,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.25 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 5 meq/L",34.13952213768078,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.25 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 10 meq/L",69.15702213768078,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.25 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 15 meq/L",104.17452213768078,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.25 mL/d
+Minimum initial alkalinity that can hold the observed pH (air-equilibrium CO2),0.5724751545993166,meq/L,W2: max over t of Alk_min(pH(t)) V(t)/V0; SCENARIO 25 °C,SCENARIO evaporation 0.5 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 2 meq/L",13.248505527410606,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.5 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 5 meq/L",34.25900552741061,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.5 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 10 meq/L",69.27650552741059,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.5 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 15 meq/L",104.29400552741059,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 0.5 mL/d
+Minimum initial alkalinity that can hold the observed pH (air-equilibrium CO2),0.5014848250619355,meq/L,W2: max over t of Alk_min(pH(t)) V(t)/V0; SCENARIO 25 °C,SCENARIO evaporation 1 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 2 meq/L",13.487472306870254,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 1 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 5 meq/L",34.49797230687025,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 1 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 10 meq/L",69.51547230687025,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 1 mL/d
+"Upper bound on cumulative nitrification by the end, Alk0 = 15 meq/L",104.53297230687025,mg N/L,"W2 bound, air-equilibrium CO2 (conservative), SCENARIO 25 °C; alkalinity_bound.csv",SCENARIO evaporation 1 mL/d

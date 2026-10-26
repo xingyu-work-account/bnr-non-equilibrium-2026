@@ -1,0 +1,22 @@
+term,value,unit,basis,volume_scenario
+"Baseline chloride, measured",not computed: chloride_mmol_L missing,mmol/L,,constant volume (closed-frame assumption)
+Chloride added (4 pulses),18.694733693518536,mmol/L,known dose; conservative,constant volume (closed-frame assumption)
+Chloride added (4 pulses),662.7843936363128,mg/L,known dose,constant volume (closed-frame assumption)
+"Final chloride, measured basis",not computed: chloride_mmol_L missing,mmol/L,,constant volume (closed-frame assumption)
+"Final chloride, SCENARIO baseline 1 mM",19.694733693518536,mmol/L,SCENARIO,constant volume (closed-frame assumption)
+"Final chloride, SCENARIO baseline 3 mM",21.694733693518536,mmol/L,SCENARIO,constant volume (closed-frame assumption)
+"Final chloride, SCENARIO baseline 8 mM",26.694733693518536,mmol/L,SCENARIO,constant volume (closed-frame assumption)
+"Final chloride, SCENARIO baseline 13.5 mM",32.194733693518536,mmol/L,SCENARIO,constant volume (closed-frame assumption)
+Check against conductivity,not computed: S3 (conductivity record not valid as solution conductivity),,,constant volume (closed-frame assumption)
+"Final chloride, SCENARIO baseline 1 mM",22.342295738534922,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.25 mL/d
+"Final chloride, SCENARIO baseline 3 mM",24.611155636436227,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.25 mL/d
+"Final chloride, SCENARIO baseline 8 mM",30.28330538118949,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.25 mL/d
+"Final chloride, SCENARIO baseline 13.5 mM",36.522670100418075,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.25 mL/d
+"Final chloride, SCENARIO baseline 1 mM",25.812232887966623,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.5 mL/d
+"Final chloride, SCENARIO baseline 3 mM",28.43346486699677,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.5 mL/d
+"Final chloride, SCENARIO baseline 8 mM",34.98654481457213,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.5 mL/d
+"Final chloride, SCENARIO baseline 13.5 mM",42.194932756905025,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 0.5 mL/d
+"Final chloride, SCENARIO baseline 1 mM",37.44245949338124,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 1 mL/d
+"Final chloride, SCENARIO baseline 3 mM",41.24474086220253,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 1 mL/d
+"Final chloride, SCENARIO baseline 8 mM",50.75044428425577,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 1 mL/d
+"Final chloride, SCENARIO baseline 13.5 mM",61.20671804851432,mmol/L,SCENARIO; amount / V_end,SCENARIO evaporation 1 mL/d

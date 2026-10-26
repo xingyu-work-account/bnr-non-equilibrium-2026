@@ -1,0 +1,2 @@
+quantity,status,note
+"NH4 relaxation times, deconvolved (process time scales)",not computed: electrode_step_response missing,NH4 relaxation is electrode-limited (S5) until the step response is measured
