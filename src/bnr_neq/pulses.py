@@ -8,6 +8,7 @@ basis, the inputs it was computed from, and a status that is either
 from __future__ import annotations
 
 import itertools
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from scipy.stats import spearmanr
 
 from . import alkalinity, energy, model, thermo, volume
 from . import segments as S
+from . import states as ST
 from .config import Config, MissingInputError
 from .constants import (
     DG0_NITRIFICATION_KJ_MOL_N,
@@ -33,6 +35,24 @@ EXPLORATORY = "EXPLORATORY (n = 4 pulses)"
 IDLE_LOWER = "idle_fraction_LOWER_BOUND"  # idle_fraction_lower_bound
 IDLE_UPPER = "idle_fraction_UPPER_BOUND"  # idle_fraction_upper_bound
 IDLE_CONDITIONAL = "idle_fraction_of_classified_time_CONDITIONAL"  # idle_fraction_of_classified_time
+# Pass 6 (G3, G4, G6): every row of pulses.csv names, in ``assumptions``, the SCENARIO and ASSUMPTION values it rests
+# on. A metric is interpreted at constant volume unless it carries its own evaporation SCENARIO or uses no N amount,
+# dose or inverted C(t): times, pH, counts, stirrer energy and FA from the electrode reading (VOLUME_FREE_METRICS;
+# ``*`` = any suffix). FA and ΔA from C(t) depend on V (C(t) scales by V0/V(t) under evaporation, and ΔC = dose/V0),
+# so they keep the constant-volume label. The W3 state metrics add the 25 °C ORP threshold; MODEL-BASED rows add the
+# fixed constants of the selected model.
+VOLUME_FREE_METRICS = ("t_pulse_d", "segment_end_d", "median_pH", "o2_windows_computed", "stirrer_energy_J",
+                       "fa_median_SENSITIVITY_reading_as_TAN_*")
+_VOLUME_FREE_RE = "^(" + "|".join(re.escape(m).replace(r"\*", ".*") for m in VOLUME_FREE_METRICS) + ")$"
+_EVAPORATION_RE = r"_SCENARIO_evaporation_([0-9.]+)_mL_per_d"
+STATE_METRICS = (IDLE_LOWER, IDLE_UPPER, IDLE_CONDITIONAL, "classified_fraction")
+W2_CONSISTENCY_ASSUMPTIONS = (f"{model.CONSTANT_VOLUME_ASSUMPTION} (the primary frame); SCENARIO: Alk0 scanned over "
+                              "1-15 meq/L (initial_alkalinity_meq_L not measured)")
+W2_CONSISTENCY_INDEPENDENT = ("checkpoint", "t_d", "alk0_scan_max_meq_L", "assumptions")
+W2_CONSISTENCY_DERIVED = ("C_inv_mgN_L", "removed_per_initial_litre_mgN_L", "removed_band_low_mgN_L",
+                          "removed_band_high_mgN_L", "alk0_required_if_nitrified_meq_L",
+                          "alk0_required_if_nitrified_band_min_meq_L", "alk0_required_any_proton_sink_meq_L",
+                          "consistent_at_best_fit")
 
 INPUTS = {
     "segments": "outputs/tables/segments.csv",
@@ -881,6 +901,26 @@ class PulseResult:
     volume_constraints: pd.DataFrame | None = None
 
 
+def row_assumptions(metric: str, text: str, selected: model.ModelSpec) -> str:
+    """The SCENARIO and ASSUMPTION values of one pulses.csv row (``text`` = its basis and series)."""
+    out = []
+    evap = re.search(_EVAPORATION_RE, metric)
+    if evap:
+        out.append(f"SCENARIO: evaporation {evap.group(1)} mL/d (V(t) = V0 − E t)")
+    elif not re.match(_VOLUME_FREE_RE, metric):
+        out.append(model.CONSTANT_VOLUME_ASSUMPTION)
+    if metric in STATE_METRICS:
+        out.append(f"W3 ORP threshold ±{ST.ORP_LEVEL_MV} mV, {ST.ORP_THRESHOLD_SCENARIO}")
+    if re.search(model.MODEL_BASED_TOKEN, text) or model.MODEL_STATE_PREFIX in text:
+        out.extend(f"{a} (selected model {selected.name})" for a in model.kinetic_assumptions(selected))
+    return "; ".join(out) or "none beyond the metric name"
+
+
+def label_assumptions(m: pd.DataFrame, selected: model.ModelSpec) -> pd.DataFrame:
+    text = model._as_text(m["basis"]) + " " + model._as_text(m["nh4_series"])
+    return m.assign(assumptions=[row_assumptions(k, t, selected) for k, t in zip(m["metric"], text)])
+
+
 def compute(cfg: Config, inputs: dict) -> PulseResult:
     tw = truth_windows(cfg, inputs)
     m = pulse_metrics(cfg, {**inputs, "truth_windows": tw})
@@ -888,6 +928,14 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     cons = w2_consistency(bal)
     n = len(cfg.pulse_times_d)
     m = qualify(m, cons, n, "pulse", "nh4_observation_model")
+    selected = inputs["model_fit"].loc[inputs["model_fit"]["selected"], "model"].iloc[0]
+    m = label_assumptions(m, {s.name: s for s in model.model_specs(cfg)}[selected])
+    base = bal[bal["volume_scenario"] == volume.CONSTANT]
+    cons = cons.assign(nh4_observation_model=str(base["nh4_observation_model"].iloc[0]),
+                       nh4_truth_id=str(base["nh4_truth_id"].iloc[0]), assumptions=W2_CONSISTENCY_ASSUMPTIONS)
+    model.check_single_observation_model(cons, label_cols=("verdict",), series_col="nh4_truth_id",
+                                         independent_cols=W2_CONSISTENCY_INDEPENDENT,
+                                         derived_cols=W2_CONSISTENCY_DERIVED)
     tw = qualify(tw, cons, n, "governing_pulse", "nh4_observation_model")
     check_w2_qualified(m, cons, n)
     check_w2_qualified(tw, cons, n, "governing_pulse")
@@ -1075,7 +1123,10 @@ def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
          "bounding the pulse needs more initial alkalinity than the 1-15 meq/L scan (at the best fit), else the "
          "consistent requirement. The stage refuses to write a C(t)-derived row of a contradicted pulse without it."),
         "",
-        md_table(r.consistency, digits=3) if r.consistency is not None else "not computed",
+        f"Assumptions of every row: {W2_CONSISTENCY_ASSUMPTIONS}.",
+        "",
+        md_table(r.consistency.drop(columns=["assumptions"], errors="ignore"), digits=3)
+        if r.consistency is not None else "not computed",
         "",
         "## Water-loss constraints (W8)",
         "",

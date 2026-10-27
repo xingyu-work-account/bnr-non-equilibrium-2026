@@ -317,7 +317,11 @@ def test_real_selection_fit_and_model_based_numbers_equal_pass3(run_all_dir):
             "whole_record_refit_rmse_log"]
     pd.testing.assert_frame_equal(new.set_index("model").loc[[sel], cols], old.set_index("model").loc[[sel], cols])
     for name in ("model_identifiability.csv", "nh4_truth_summary.csv", "nh4_truth_vectors.csv"):
-        pd.testing.assert_frame_equal(pd.read_csv(tab / name), _pass3(name))
+        # pass 6 (G8) appends provenance columns only: every column of the fixture is still compared exactly
+        got, ref = pd.read_csv(tab / name), _pass3(name)
+        extra = [c for c in got.columns if c not in ref.columns]
+        assert extra == ([] if name == "nh4_truth_summary.csv" else ["nh4_observation_model", "nh4_series", "assumptions"])
+        pd.testing.assert_frame_equal(got[list(ref.columns)], ref)
     pm, pm_old = pd.read_csv(tab / "pulses.csv"), _pass3("pulses_model_based.csv")
     key = ["pulse", "metric"]
     mb = pm[pm["metric"].str.contains("MODEL_BASED")].set_index(key).sort_index()

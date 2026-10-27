@@ -172,13 +172,15 @@ R8 CASE: a slope window between two electrode steps shorter than 3 x the longest
 
 Every row derived from the M6 observation model carries `w2_bound_check`: `QUALIFIED: ...` when a checkpoint bounding the pulse needs more initial alkalinity than the 1-15 meq/L scan (at the best fit), else the consistent requirement. The stage refuses to write a C(t)-derived row of a contradicted pulse without it.
 
-| checkpoint | t_d | C_inv_mgN_L | removed_per_initial_litre_mgN_L | removed_band_low_mgN_L | removed_band_high_mgN_L | alk0_required_if_nitrified_meq_L | alk0_required_if_nitrified_band_min_meq_L | alk0_required_any_proton_sink_meq_L | alk0_scan_max_meq_L | consistent_at_best_fit | verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| pre_pulse1 | 8.52 | 111 | 66.3 | 13.5 | 199 | 9.53 | 1.98 | 4.79 | 15 | True | consistent: the removal needs Alk0 ≥ 9.5 meq/L if nitrified |
-| pre_pulse2 | 10.6 | 151 | 91.2 | 23.7 | 245 | 13.1 | 3.44 | 6.57 | 15 | True | consistent: the removal needs Alk0 ≥ 13.1 meq/L if nitrified |
-| pre_pulse3 | 24.6 | 164 | 144 | 73.2 | 302 | 20.8 | 10.7 | 10.5 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 20.8 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 10.7 meq/L there), or with a 1 eq/mol N sink (≥ 10.5 meq/L), or if Alk0 > 15 meq/L |
-| pre_pulse4 | 32.4 | 241 | 132 | 62 | 291 | 19 | 9 | 9.6 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 19.0 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 9.0 meq/L there), or with a 1 eq/mol N sink (≥ 9.6 meq/L), or if Alk0 > 15 meq/L |
-| end | 47.9 | 294 | 145 | 79.6 | 299 | 20.9 | 11.5 | 10.5 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 20.9 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 11.5 meq/L there), or with a 1 eq/mol N sink (≥ 10.5 meq/L), or if Alk0 > 15 meq/L |
+Assumptions of every row: ASSUMPTION: constant volume V0 (evaporation not measured) (the primary frame); SCENARIO: Alk0 scanned over 1-15 meq/L (initial_alkalinity_meq_L not measured).
+
+| checkpoint | t_d | C_inv_mgN_L | removed_per_initial_litre_mgN_L | removed_band_low_mgN_L | removed_band_high_mgN_L | alk0_required_if_nitrified_meq_L | alk0_required_if_nitrified_band_min_meq_L | alk0_required_any_proton_sink_meq_L | alk0_scan_max_meq_L | consistent_at_best_fit | verdict | nh4_observation_model | nh4_truth_id |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| pre_pulse1 | 8.52 | 111 | 66.3 | 13.5 | 199 | 9.53 | 1.98 | 4.79 | 15 | True | consistent: the removal needs Alk0 ≥ 9.5 meq/L if nitrified | M6_log | C_inv:c29e26a0fb89 |
+| pre_pulse2 | 10.6 | 151 | 91.2 | 23.7 | 245 | 13.1 | 3.44 | 6.57 | 15 | True | consistent: the removal needs Alk0 ≥ 13.1 meq/L if nitrified | M6_log | C_inv:c29e26a0fb89 |
+| pre_pulse3 | 24.6 | 164 | 144 | 73.2 | 302 | 20.8 | 10.7 | 10.5 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 20.8 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 10.7 meq/L there), or with a 1 eq/mol N sink (≥ 10.5 meq/L), or if Alk0 > 15 meq/L | M6_log | C_inv:c29e26a0fb89 |
+| pre_pulse4 | 32.4 | 241 | 132 | 62 | 291 | 19 | 9 | 9.6 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 19.0 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 9.0 meq/L there), or with a 1 eq/mol N sink (≥ 9.6 meq/L), or if Alk0 > 15 meq/L | M6_log | C_inv:c29e26a0fb89 |
+| end | 47.9 | 294 | 145 | 79.6 | 299 | 20.9 | 11.5 | 10.5 | 15 | False | QUALIFIED: contradicts the W2 bound for every scanned Alk0 (1-15 meq/L) at the best fit (needs ≥ 20.9 meq/L if nitrified); consistent only within the open upper part of the C(t) parameter band (≥ 11.5 meq/L there), or with a 1 eq/mol N sink (≥ 10.5 meq/L), or if Alk0 > 15 meq/L | M6_log | C_inv:c29e26a0fb89 |
 
 ## Water-loss constraints (W8)
 

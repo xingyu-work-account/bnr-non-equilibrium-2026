@@ -578,6 +578,9 @@ def comparisons(bins: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 NULL_COVERAGE_PHIS = COVERAGE_PHIS
 NULL_COVERAGE_REPLICATES = 200
 NULL_COVERAGE_MIN_OK = 0.90
+# G3: the SCENARIO and ASSUMPTION values every state fraction and comparison rests on
+STATE_ASSUMPTIONS = (f"W3 ORP threshold ±{ORP_LEVEL_MV} mV, {ORP_THRESHOLD_SCENARIO}; {model.CONSTANT_VOLUME_ASSUMPTION} "
+                     "(C(t) slopes read as consumption)")
 NULL_COVERAGE_COLUMNS = ("comparison", "phi", "n_replicates", "n_computed", "coverage_of_zero", "nominal",
                          "block_bins_median", "basis")
 
@@ -671,13 +674,13 @@ STATE_TABLE_COLUMNS = {
               "orp_rel_window_median_mV", "nh4_sign", "state", "state_reason")),
     "timeline": ((), ("state", "t_start_d", "t_end_d", "duration_d", "n_bins", "median_C_inv_mgN_L",
                       "median_consumption_mgN_L_d", "median_pH", "median_orp_rel_mV", "reason")),
-    "fractions": (("interval", "t_from_d", "t_to_d", "n_bins", "fraction_sensor_artifact"),
+    "fractions": (("interval", "t_from_d", "t_to_d", "n_bins", "fraction_sensor_artifact", "assumptions"),
                   ("fraction_active_nitrification", "fraction_inactive_oversupplied", "fraction_oxygen_limited",
                    "fraction_unclassified", "n_classified", "n_inactive_oversupplied", "classified_fraction",
                    "idle_fraction_lower_bound", "idle_fraction_upper_bound", "bounds_status",
                    "idle_fraction_of_classified_time", "status", "median_nh4_slope_resid_lag1")),
     "comparisons": (("comparison", "group_a", "group_b", "role", "response", "registration_sha256",
-                     "registration_status", "null_coverage_min", "interval_reading"),
+                     "registration_status", "null_coverage_min", "interval_reading", "assumptions"),
                     ("diff", "ci95_low", "ci95_high", "n_a", "n_b", "block_bins", "n_strata", "n_boot_valid", "status")),
 }
 COVERAGE_COLUMNS = ("phi", "n_points", "n_windows", "nominal", "coverage_unscaled", "coverage_scaled_estimated_rho",
@@ -711,7 +714,8 @@ def compute(cfg: Config, inputs: dict) -> StateResult:
             "nh4_series": str(inputs["truth"]["nh4_truth_id"].iloc[0])}
     comp = comparisons(bins, cfg)
     null = null_coverage(bins, comp, cfg)
-    comp = interval_reading(comp, null)
+    comp = interval_reading(comp, null).assign(assumptions=STATE_ASSUMPTIONS)
+    fr = fr.assign(assumptions=STATE_ASSUMPTIONS)
     out = [x.assign(**prov) for x in (bins, timeline(bins), fr, comp)]
     for x, name in zip(out, ("bins", "timeline", "fractions", "comparisons")):
         indep, derived = STATE_TABLE_COLUMNS[name]
@@ -753,7 +757,7 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
          "applied in order; a bin flagged by QC carries no process state. Excluded sensor features (from the M2 "
          f"verdicts): {', '.join(sorted(r.excluded)) or 'none'}; a rule that used one would raise."),
         "",
-        md_table(r.rules),
+        md_table(r.rules.drop(columns=["registration_sha256", "registration_status"])),
         "",
         "## Time fractions per interval",
         "",
@@ -769,7 +773,9 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
         "",
         interval_limits_text(r.coverage, r.fractions),
         "",
-        md_table(r.fractions, digits=3),
+        f"Assumptions of every fraction and comparison: {STATE_ASSUMPTIONS}.",
+        "",
+        md_table(r.fractions.drop(columns=["assumptions"]), digits=3),
         "",
         "Synthetic check of the slope interval (`states_interval_coverage.csv`):",
         "",
@@ -784,7 +790,7 @@ def write_report(cfg: Config, r: StateResult, path: Path) -> None:
          "blocks. 'Within pulse intervals' compares bins of the same pulse interval only, which removes the "
          "between-interval time trend but not the trend inside an interval. These are associations, not causes."),
         "",
-        md_table(r.comparisons, digits=3),
+        md_table(r.comparisons.drop(columns=["assumptions", "registration_sha256", "registration_status"]), digits=3),
         "",
         (f"Synthetic null check of these intervals (pass 6, G2; `states_bootstrap_null_coverage.csv`): the record's "
          f"eligible bins and group labels with a response that has no group effect ({NULL_COVERAGE_REPLICATES} "
