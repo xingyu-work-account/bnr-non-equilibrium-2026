@@ -1357,3 +1357,41 @@ Open:
 - everything after `f1744fc` is uncommitted.
 
 Pass 6 is an implementer's log, not an approval; the reviewer decides.
+
+## Remediation pass 6, G5: a primary source for the field aeration efficiency range (2026-10-27)
+
+Scope: G5 of the pass-6 audit. The AE SCENARIO range (`scenarios.sae_field_kgO2_per_kWh`, 0.3 / 1.0 / 2.6 kg O2/kWh) was sourced from lecture notes (Stenstrom and Rosso 2010) that say their table is "not for design". The user supplied three references in `reference/` (untracked; not committed). This section was written before any edit or run of G5.
+
+### Verification of the supplied references (before any edit)
+
+- **Gresch, Armbruster, Braun and Gujer (2011),** Water Research 45, 810–818 (doi:10.1016/j.watres.2010.09.009). Read in full: it gives no aeration efficiency in kg O2/kWh. Its only energy figure is an aeration power density of 10–30 W/m³, quoted from Metcalf & Eddy (2003). Not used.
+- **Azis@Aziz, Ramli and Hamid (2019),** Desalination and Water Treatment 156, 38–45 (doi:10.5004/dwt.2019.24134). Read in full: blower power and kWh only, no oxygen transferred. Not used.
+- **`reference/wastewater_aeration_efficiency_literature.md`.** A secondary summary dated 2026-10-27. Each number it cites was checked against its primary source where that source was readable:
+  - **Crawford and Sandino (2010), Table 2-8: verified** against the report PDF. The source is Crawford G. and Sandino J. (2010), *Energy Efficiency in Wastewater Treatment in North America: A Compendium of Best Practices and Case Studies of Novel Approaches*, WERF report OWSO4R07e, CH2M HILL Canada, Table 2-8 "Aeration Efficiency", p. 2-20, "Based on WEF MOP FD-13 Table 5.1 with additional content" and cited in the text as WEF (2009), MOP 32. The table has 10 rows; the summary reproduced 5. Field-condition values (kg O2/kWh):
+
+    | Aerator type | Field |
+    | --- | --- |
+    | fine-pore¹ | 2.5–3.5 |
+    | coarse bubble¹ | 1.0–2.0 |
+    | surface centrifugal, low speed | 0.7–1.4 |
+    | surface centrifugal, draft tube | 0.7–1.3 |
+    | surface axial, high speed | 0.7–1.2 |
+    | downdraft open turbine | 0.6–1.2 |
+    | downdraft closed turbine | 0.7–1.3 |
+    | submerged turbine, sparger¹ | 0.7–1.1 |
+    | submerged impeller | 0.7–1.1 |
+    | surface brush and blade | 0.5–1.1 |
+
+    ¹ Footnote: "Includes blower power requirements". The table states no operating DO or alpha for the field values.
+  - **Baeten et al. (2021),** Sci. Total Environ. 787, 147651, "1.53 kg O2/kWh under process conditions": **not verified.** The full text is closed access. The abstract (TU Delft research portal) reports aeration characteristics but gives no kg O2/kWh value. Not used.
+  - **The other studies in the summary** (Côté 2015, Adel 2019, Thakre 2009, Roy 2021, Mahmud 2024) are laboratory, pilot or clean-water (standard) values, which the summary itself says not to use as field values. The Ontario table is clean-water SAE. Not used.
+
+### Decision (fixed before any edit or run)
+
+- **Rows.** The AE SCENARIO range comes from the field column of Crawford and Sandino (2010), Table 2-8, restricted to the diffused-air rows marked "Includes blower power requirements": fine-pore, coarse bubble, and submerged turbine with sparger. The pulse metrics convert O2 into the aeration energy of a blower-aerated BNR plant, so only rows whose energy basis includes the blower are comparable.
+- **Values.** Low = the lowest field value of those rows, **0.7**. High = the highest, **3.5**. Central = their geometric mean √(0.7 x 3.5) = 1.565, rounded to two significant figures, **1.6**. AE enters every energy metric as 1/AE, so the geometric mean is the same factor (about 2.2) from each end.
+- **What follows from that.** The metric suffixes change from AE0.3 / AE1 / AE2.6 to AE0.7 / AE1.6 / AE3.5. Every aeration-energy value, every Gibbs-to-aeration ratio, and the AE text in `pulses.csv`, the reports and fig1 change with them. Nothing else may change.
+- **Retained as cross-checks, not as the source.**
+  - Stenstrom and Rosso (2010), 0.3–2.6 in process water at 2 mg/L DO, with its "not for design" caveat. It extends below the new low end (coarse bubble, low SRT).
+  - Moore (2021), 0.61–1.40 at alpha 0.84 and 2 mg/L DO.
+- **DO wording.** Table 2-8 does not state the field DO, so "AE defined at about 2 mg/L DO" is replaced by "field AE at the plant's operating DO (not stated in Table 2-8; the cross-check sources state 2 mg/L)". The capacity at DO = 0 is still divided by an AE at an operating DO above 0, so the supply-based energy remains an upper bound.
