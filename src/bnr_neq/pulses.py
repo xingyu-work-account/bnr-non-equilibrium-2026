@@ -240,7 +240,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         g_rel = float(energy.gibbs_released_J(n_removed)) if removed_ok else np.nan
         for sae in saes:
             sl = f"AE{sae:g}"
-            sae_basis = (f"SCENARIO field (process-water) aeration efficiency AE {sae:g} kg O2/kWh at about 2 mg/L DO, "
+            sae_basis = (f"SCENARIO field (process-water) aeration efficiency AE {sae:g} kg O2/kWh at the plant's operating DO, "
                          f"not the clean-water SAE ({sae_src})")
             if removed_ok and n_removed > 0:
                 e = float(energy.aeration_energy_kWh(o2, sae))
@@ -291,7 +291,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                     add(k, metric_e, float(energy.specific_energy_kWh_per_kgN(e_sup, n_removed)), "kWh/kg N",
                         f"supply capacity / AE / N removed: includes aeration while idle; {kla_basis}; SCENARIO field AE "
                         f"{sae:g} kg O2/kWh ({sae_src}). Inconsistent by construction: the capacity is at DO = 0 while "
-                        "the AE is defined at DO = 2 mg/L, so this is an upper bound", "o2_supply_capacity; n_removed_mgN",
+                        "the AE is a field value at the plant's operating DO (> 0), so this is an upper bound", "o2_supply_capacity; n_removed_mgN",
                         obs=OBS, series=tid)
                     add(k, metric_g, g_rel / float(energy.kwh_to_J(e_sup)), "-",
                         f"free energy released / supply-based aeration energy; {kla_basis}; SCENARIO field AE {sae:g}",
@@ -1108,7 +1108,7 @@ def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
          "UPPER_BOUND: inactive, unclassified and artifact bins over all bins) with its coverage (`classified_fraction`) "
          "and, only where the coverage is at least one half, the CONDITIONAL value over classified time, and the "
          "dose-removal time (dose / post-pulse rate, not a fitted relaxation constant) against the pulse interval. "
-         "The supply-based energy divides a transfer capacity at DO = 0 by a field AE defined at DO = 2 mg/L. The "
+         "The supply-based energy divides a transfer capacity at DO = 0 by a field AE at the plant's operating DO (> 0). The "
          "stirrer terms are LABORATORY-SPECIFIC."),
         "",
         ("R8 CASE: a slope window between two electrode steps shorter than 3 x the longest delayed electrode response is "

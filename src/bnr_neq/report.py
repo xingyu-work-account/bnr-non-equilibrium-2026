@@ -204,7 +204,8 @@ def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          "bins carry no state. The idle fraction is reported as bounds with the classified fraction (coverage)."),
         ("Energy (W4): kLa_O2 and the field (process-water) aeration efficiency AE are SCENARIO ranges (AE source: "
          f"{cfg.get('scenarios.sae_source')}); the O2 supply is a capacity at DO = 0 while DO is not measured, whereas "
-         "the AE values are defined at about 2 mg/L DO; stirrer power is a laboratory-specific term only."),
+         "the AE values are field values at the plant's operating DO (> 0; not stated in the source table); stirrer power "
+         "is a laboratory-specific term only."),
         ("Model candidates (W5): alkalinity limitation uses the model's own alkalinity state (2 eq/mol N, nothing added) "
          "with K_ALK = 0.5 meq/L fixed (ASM3)."),
         ("Electrode fragments (R8): a slope window between two electrode steps (offset jumps, pulse-response jumps or "
@@ -835,14 +836,14 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         (f"The metric family per pulse (constant volume; all rows with inputs and status in `pulses.csv`). SCENARIO "
          f"ranges: kLa_O2 = {', '.join(f'{x:g}' for x in sc['kLa_O2_per_d'])} 1/d (not measured); field (process-water) "
-         f"aeration efficiency AE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (at about 2 "
-         "mg/L DO, not the clean-water standard SAE; fine pore: 3.6-4.8 in clean water against 0.7-2.6 in process "
-         "water; metric suffix `AE`, configuration key `sae_field_kgO2_per_kWh`), source: "
-         f"{sc['sae_source']}. The source's own caveat applies: its table \"should not be used as a general guide line "
-         "and not for design\" (Stenstrom and Rosso 2010, p. 55, as read by the reviewer), so these are scenario "
-         "values only. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
+         f"aeration efficiency AE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (field "
+         "conditions, not the clean-water standard SAE; fine pore: 5.0-6.5 standard against 2.5-3.5 field; metric "
+         "suffix `AE`, configuration key `sae_field_kgO2_per_kWh`), source: "
+         f"{sc['sae_source']}. Low and high are the extremes of the diffused-air rows that include blower power, the "
+         "central value their geometric mean (pass 6, G5, `docs/progress.md`); they are values of full-scale "
+         "equipment, not of this vessel, so these are scenario values only. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
          "lower bound and the supply-based energy an upper bound; the supply-based energy also divides a capacity at "
-         "DO = 0 by an AE defined at DO = 2 mg/L, an inconsistency that inflates it further. The demand-based energy "
+         "DO = 0 by an AE at the plant's operating DO (> 0), an inconsistency that inflates it further. The demand-based energy "
          "(4.57/AE kWh/kg N) is the "
          "floor that any aeration system must spend on the N actually removed; the supply-based value adds the aeration "
          "spent while the biomass was idle. The stirrer power is a laboratory-specific term (not measured, "

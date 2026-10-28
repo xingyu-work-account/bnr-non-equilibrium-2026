@@ -1395,3 +1395,59 @@ Scope: G5 of the pass-6 audit. The AE SCENARIO range (`scenarios.sae_field_kgO2_
   - Stenstrom and Rosso (2010), 0.3–2.6 in process water at 2 mg/L DO, with its "not for design" caveat. It extends below the new low end (coarse bubble, low SRT).
   - Moore (2021), 0.61–1.40 at alpha 0.84 and 2 mg/L DO.
 - **DO wording.** Table 2-8 does not state the field DO, so "AE defined at about 2 mg/L DO" is replaced by "field AE at the plant's operating DO (not stated in Table 2-8; the cross-check sources state 2 mg/L)". The capacity at DO = 0 is still divided by an AE at an operating DO above 0, so the supply-based energy remains an upper bound.
+
+### What changed (after the decision above)
+
+- `config/experiment.toml`: `sae_field_kgO2_per_kWh = [0.7, 1.6, 3.5]`; `sae_source` names Crawford and Sandino (2010), Table 2-8, with the three diffused-air rows, and keeps Stenstrom and Rosso (2010) and Moore (2021) as cross-checks. The comment states the rule.
+- `src/bnr_neq/pulses.py` and `src/bnr_neq/report.py`: the AE text. "At about 2 mg/L DO" and "defined at DO = 2 mg/L" become "at the plant's operating DO (> 0)", and the methods text adds "not stated in the source table". This is shorter than the wording registered above: the parenthesis about the cross-check sources stating 2 mg/L was not used in the generated text, and the cross-checks are only named in `sae_source`. The §2 text now compares standard and field values from Table 2-8 (fine pore 5.0-6.5 against 2.5-3.5) and states the rule. The Stenstrom "not for design" caveat was removed from the report, because that table is no longer the source.
+- `tests/test_pass6_fixes.py`: `test_field_ae_range_is_the_registered_rule_on_table_2_8` holds the three diffused-air rows of Table 2-8 as literals and recomputes the rule from them. The config range must equal both the computed values and `[0.7, 1.6, 3.5]`. The source string must name Crawford and Sandino (2010), Table 2-8 and the report number.
+
+### Changed outputs against the committed pass 6 (`ba394df`)
+
+`diff -rq` against a copy of the committed outputs taken before any G5 edit shows 7 files changed and none added or removed:
+- `tables/pulses.csv`;
+- `reports/pulses.md` and `reports/analysis_report.md`;
+- `figures/fig1_linkage.{png,svg}` and `figures/fig8_efficiency.{png,svg}`.
+
+The decision above predicted fig1 but did not name fig8. Panel d of fig8 plots energy per N removed with AE whiskers, so it depends on AE as well.
+
+- **`pulses.csv`:** 352 rows before and after; same columns and order. Columns that changed: `metric`, `value`, `basis`.
+  - **The 244 rows without an AE suffix** are byte-identical.
+  - **The 108 AE rows:**
+    - after mapping AE0.3/AE1/AE2.6 to AE0.7/AE1.6/AE3.5, the metric names match one to one, in the same order;
+    - every computed value is the old value times AE_old/AE_new (energy) or AE_new/AE_old (Gibbs-to-aeration ratio), to 1e-9 relative;
+    - their `basis` text changes only in the AE source and DO wording;
+    - every other column is unchanged.
+  - **Metric kinds:** `aeration_energy_demand_Wh`, `aeration_energy_demand_kWh_per_kgN`, `aeration_energy_supply_kWh_per_kgN`, `gibbs_to_aeration_energy_demand`, `gibbs_to_aeration_energy_supply`.
+- **`pulses.md`:** the same names, values and text. "Not computed" reasons are unchanged; only their metric names changed.
+- **`analysis_report.md`:**
+  - the demand-based floor of 4.57 g O2/g N changes from 1.76-15.23 to 1.31-6.53 kWh/kg N (= 4.57/3.5 to 4.57/0.7);
+  - the central AE changes from 1 to 1.6, so the kLa 1/10/100 supply energies change from 6.8/21.9/99.7 to 4.2/13.7/62.3 kWh/kg N (÷ 1.6);
+  - the Gibbs-to-aeration ratios are multiplied by 1.6 (0.316 → 0.506; 0.0694 → 0.111);
+  - the AE source, the rule and the DO wording change as listed above.
+- **fig1:** the scenario label changes from 0.3-2.6 to 0.7-3.5.
+- **fig8 panel d:** the whiskers span AE 0.7-3.5 and the markers sit at AE 1.6.
+
+Nothing else changed: no verdict, state or model output, and no table other than `pulses.csv`. The changed numbers are all SCENARIO values.
+
+### Commands and results (G5)
+
+Environment as for pass 6. The machine was shared with another long CPU-bound process for the whole validation, so wall times are longer than in pass 6. Ruff, run-all and pytest ran one after another, not concurrently.
+
+```
+$ uv run ruff check
+All checks passed!
+$ rm -rf outputs && uv run python -m bnr_neq run-all        # exit 0, 3:37:32 wall (real 13051.91 s)
+(stage lines identical to pass 6: references 11/13 and 9/11, 28/28 estimator checks,
+ 13/15 parameters identifiable, 12 % classified, 274 metrics computed, 78 not computed)
+$ diff -rq <copy of the ba394df outputs> outputs                # 7 files differ; listed above
+$ uv run pytest -q -rs                                       # after the run-all
+489 passed in 24790.51s (6:53:10)
+```
+
+- **Test count, 489:** the 488 tests of pass 6, plus the new G5 test.
+- **Skips:** none.
+- **Determinism:** the suite again includes the two fresh run-all executions with byte-identical CSV and SVG outputs.
+- **Code hashes:** the SHA-256 of every file under `src/` and `tests/`, `config/experiment.toml`, `docs/states_registration.md`, `pyproject.toml` and `uv.lock` was the same before the run-all and after pytest.
+
+Open: none from the pass-6 audit. Baeten et al. (2021) stays unverified and unused. Pass 6 is an implementer's log, not an approval; the reviewer decides.

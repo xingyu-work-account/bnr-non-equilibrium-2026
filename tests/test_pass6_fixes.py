@@ -308,3 +308,19 @@ def test_real_states_are_registered_and_every_interval_is_read_against_the_null(
     for text in (rep.split("## 3.")[1].split("## 4.")[0], states_md):
         assert ST.REGISTRATION_STATUS in text and h in text
     assert "Pre-registered rules" not in rep and "pre-registered rules" not in rep
+
+
+# --- G5: the field AE SCENARIO range follows its registered rule (docs/progress.md, pass 6, G5) ------------------------
+# Crawford and Sandino (2010), WERF OWSO4R07e, Table 2-8, field column, the rows marked "Includes blower power"
+TABLE_2_8_DIFFUSED_FIELD = {"fine-pore": (2.5, 3.5), "coarse bubble": (1.0, 2.0), "submerged turbine, sparger": (0.7, 1.1)}
+
+
+def test_field_ae_range_is_the_registered_rule_on_table_2_8(cfg):
+    import math
+
+    lo = min(v[0] for v in TABLE_2_8_DIFFUSED_FIELD.values())
+    hi = max(v[1] for v in TABLE_2_8_DIFFUSED_FIELD.values())
+    mid = float(f"{math.sqrt(lo * hi):.2g}")
+    assert sorted(cfg.get("scenarios.sae_field_kgO2_per_kWh")) == [lo, mid, hi] == [0.7, 1.6, 3.5]
+    src = cfg.get("scenarios.sae_source")
+    assert src.startswith("Crawford G. and Sandino J. (2010)") and "Table 2-8" in src and "OWSO4R07e" in src
