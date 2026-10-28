@@ -2285,7 +2285,7 @@ z
      <use xlink:href="#DejaVuSans-24" transform="translate(487.15625 0)"/>
      <use xlink:href="#DejaVuSans-28" transform="translate(555.5625 0)"/>
     </g>
-    <!-- (SCENARIO 0.3-2.6 -->
+    <!-- (SCENARIO 0.7-3.5 -->
     <g style="fill: #52514e" transform="translate(630.91792 146.796377) scale(0.072 -0.072)">
      <defs>
       <path id="DejaVuSans-13" d="M 2034 4250 
@@ -2322,11 +2322,11 @@ z
      <use xlink:href="#DejaVuSans-3" transform="translate(556.4375 0)"/>
      <use xlink:href="#DejaVuSans-13" transform="translate(588.21875 0)"/>
      <use xlink:href="#DejaVuSans-11" transform="translate(651.84375 0)"/>
-     <use xlink:href="#DejaVuSans-16" transform="translate(683.625 0)"/>
+     <use xlink:href="#DejaVuSans-1a" transform="translate(683.625 0)"/>
      <use xlink:href="#DejaVuSans-10" transform="translate(747.25 0)"/>
-     <use xlink:href="#DejaVuSans-15" transform="translate(783.328125 0)"/>
+     <use xlink:href="#DejaVuSans-16" transform="translate(783.328125 0)"/>
      <use xlink:href="#DejaVuSans-11" transform="translate(846.953125 0)"/>
-     <use xlink:href="#DejaVuSans-19" transform="translate(878.734375 0)"/>
+     <use xlink:href="#DejaVuSans-18" transform="translate(878.734375 0)"/>
     </g>
     <!-- kg O2/kWh); -->
     <g style="fill: #52514e" transform="translate(642.448607 155.886377) scale(0.072 -0.072)">

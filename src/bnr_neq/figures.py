@@ -161,7 +161,7 @@ def fig4(t: dict[str, pd.DataFrame], states_bins: pd.DataFrame, pulse_times: lis
         ax.axvline(tp, color=INK2, lw=0.8, ls=":")
     ax.set_yticks(range(len(STATE_COLORS)), [s.replace("_", " ") for s in reversed(STATE_COLORS)], fontsize=8)
     ax.set_xlabel("Time (d); dotted lines: NH4Cl pulses", fontsize=8.5, color=INK2)
-    ax.set_title("c  Process-state timeline (pre-registered rules; 0.01 d bins)", loc="left", fontsize=10, color=INK)
+    ax.set_title("c  Process-state timeline (registered rules, revised after first results; 0.01 d bins)", loc="left", fontsize=10, color=INK)
     fig.suptitle("Figure 4. Constraints on the conversion: alkalinity, free ammonia and process state", x=0.06,
                  ha="left", fontsize=11, color=INK)
     _save(fig, d, "fig4_constraints", plt)

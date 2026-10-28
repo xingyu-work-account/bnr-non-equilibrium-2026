@@ -17,6 +17,11 @@ Z1_COLS = ["C_start_ratio_to_constant_volume", "phi_start_median", "C_end_ratio_
            "ratio_within_phi_tolerance"]
 NEW_COLS = {"model_fit.csv": ["cal_at_bounds"], "model_calibration_starts.csv": ["cal_at_bounds"],
             "model_volume_scenario_summary.csv": Z1_COLS}
+# pass 6 (G6, G8): provenance and assumption columns appended to the same tables (docs/progress.md, pass 6)
+PASS6_COLS = {"model_fit.csv": ["nh4_observation_model", "nh4_series", "assumptions"],
+              "model_calibration_starts.csv": ["nh4_observation_model", "nh4_series", "assumptions"],
+              "model_volume_scenario_summary.csv": ["nh4_observation_model", "nh4_series", "constant_volume_nh4_series",
+                                                    "assumptions"]}
 
 T = np.round(np.arange(1.0, 20.0, 0.01), 10)
 PH = 7.6 - 0.02 * (T - 1)
@@ -183,7 +188,7 @@ def test_real_pre_existing_columns_equal_8e10d0e(run_all_dir):
         if not ref.is_file():
             pytest.fail(f"fixture {ref} missing (extracted with git show 8e10d0e; docs/progress.md, pass 5)")
         old, new = pd.read_csv(ref), pd.read_csv(run_all_dir / "tables" / name)
-        assert [c for c in new.columns if c not in old.columns] == new_cols
+        assert [c for c in new.columns if c not in old.columns] == new_cols + PASS6_COLS[name]  # pass 6 (G8): appended
         pd.testing.assert_frame_equal(new[list(old.columns)], old)
 
 

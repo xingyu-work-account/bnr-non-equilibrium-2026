@@ -1162,3 +1162,292 @@ $ uv run pytest -q -rs                                       # after the run-all
 ```
 
 458 = the 444 tests of `8e10d0e` (none removed; the changed ones are listed under "Tests") plus 13 in the new `tests/test_pass5_fixes.py` and 1 new in `tests/test_pass4_fixes.py`. No test was skipped (`-rs` lists none); the pass-3 regression test now reads its fixtures and cannot skip. The suite includes the two fresh run-all executions with byte-identical CSV and SVG outputs (`test_main.test_run_all_is_deterministic`). Reproducibility: the development run-all and the final run-all are byte-identical in every table, figure and `processed/` file. No code changed after these runs (file hashes checked before and after pytest), pytest did not touch `outputs/` (checked against a copy of the final run), and no stage was regenerated after the final run-all. Pass 5 is an implementer's log, not an approval; the reviewer decides.
+
+## Remediation pass 6: registration of the W3 rules, a null check of the block bootstrap, and SCENARIO/ASSUMPTION and provenance labels (2026-10-26)
+
+Scope: gaps G1 to G4 and G6 to G8 of an audit of W3 to W5 (`docs/remediation_prompt_2026-10-19.md`) against the requirements on pre-registration, the block bootstrap, scenario labels and provenance columns. The work is on branch `remediation/pass6-2026-10-26`, from `2dd5a2b`, whose outputs equal the merged pass 5. G5 is left open: a primary source for the field aeration efficiency (SAE/AE) range, to be supplied by the user. No reference is invented here, and the AE range and its current source are unchanged.
+
+This is an implementer's log, not an approval. Apart from the new null check (G2), the pass only adds columns, labels, report text and tests. It changes no fitted value, start, selection, C(t), state, comparison, primary row, MODEL-BASED number, scenario value or figure body.
+
+### The gaps
+
+- **G1.** The W3 rules cannot be shown to be pre-registered. The rules and their first results arrived together in `954f87a`, and two rules changed after results existed: the "≥ 2 blocks per group" rule (pass 2) and the autocorrelation widening of the slope intervals (pass 3, X2).
+- **G2.** The coverage of the block bootstrap was never checked when there is no true difference.
+- **G3.** The ±15 mV ORP threshold is derived at a 25 °C SCENARIO temperature, and nothing labels it so.
+- **G4.** Constant volume is an ASSUMPTION of the primary pulse metrics, stated only in their `basis` text.
+- **G6.** K_NH and K_ALK are fixed literature values, with no label.
+- **G7.** The W5 alkalinity state is a closed balance, not an inorganic-carbon model.
+- **G8.** Seven tables of NH4-derived numbers have no observation-model column: `model_fit.csv`, `model_calibration_starts.csv`, `model_volume_scenarios.csv`, `model_volume_scenario_summary.csv`, `model_identifiability.csv`, `model_response_fractions.csv` and `nh4_truth_w2_consistency.csv`.
+
+### G1 and G2: registered before they were run (commit `f1744fc`)
+
+A pre-registration cannot be created after the fact, so this pass freezes the rules and states their real history. Commit `f1744fc` (2026-10-26 16:02 -04:00) added three things before any output of this pass was computed:
+
+- `states.registration()` and `states.registration_sha256()`;
+- the G2 null-check code and its decision rule;
+- `docs/states_registration.md`, which holds the hash `e34bff2c1693bfade1758db70a897f5d9676e7c34500509e91beaa2b97edf270` and the status, and gives the history above.
+
+The hash covers:
+
+- the three rules;
+- every threshold, window, seed and resample count;
+- the sensor exclusions and the indicator partitions;
+- the source code of every decision function, including those of the null check.
+
+A test fails if the code no longer matches the hash. A change to the rules must update the document in its own commit before any output computed under the new rules is reported. Every output that reads the rules carries the status `REVISED AFTER FIRST RESULTS (not pre-registered)`: `states_rules.csv` and `states_comparison.csv` (columns `registration_sha256` and `registration_status`), `states.md`, §1 point 6, §3 and the methods paragraph of the report, and the fig4c title. The edits made after the commit (labels, rendering) leave the hash unchanged, as the test checks.
+
+**G2 design (in the commit).** The check keeps the record's eligible bins and group labels. It uses a response with no group effect: the 101-bin least-squares slope of AR(1) noise, so neighbouring values share 100 of their 101 bins, as in the real response. It sets φ to 0.5, 0.9, 0.95 and 0.98, runs 200 replicates per φ, and applies the registered block rule with 999 resamples and a fixed seed.
+
+**G2 decision rule (in the commit).** An interval is "adequate" if it covers the true difference 0 in at least 0.90 of the replicates at every φ. Otherwise the comparison is labelled `UNDER-COVERS`, and an interval that excludes 0 is not read as evidence of a difference. The block rule stays as registered whatever the check finds.
+
+### What changed in G3, G4, G6, G7 and G8
+
+- **G3.** `states.ORP_THRESHOLD_SCENARIO` ("SCENARIO 25 °C: RT ln10/(4F) at 298.15 K = 14.8 mV, rounded; the liquid temperature is not measured") is added to:
+  - the `thresholds` text of `states_rules.csv`;
+  - a new `assumptions` column on `states_fractions.csv` and `states_comparison.csv`, together with the constant-volume ASSUMPTION that lets C(t) slopes be read as consumption;
+  - the methods paragraph of the report.
+- **G4.** `pulses.csv` gains `assumptions`, one per row from `pulses.row_assumptions`:
+  - "SCENARIO: evaporation X mL/d" on the evaporation rows;
+  - otherwise the constant-volume ASSUMPTION, unless the metric uses no N amount, no dose and no inverted C(t): times, median pH, the O2 window count, stirrer energy, and FA from the electrode reading (`pulses.VOLUME_FREE_METRICS`). FA and ΔA from C(t) keep the label: C(t) scales by V0/V(t) under evaporation (pass 5, Z1), and ΔA uses ΔC = dose/V0;
+  - the ORP SCENARIO on the state-derived rows;
+  - the kinetic assumptions of the selected model on the MODEL-BASED rows.
+- **G6 and G7.** `model.py` adds:
+  - `K_NH_ASSUMPTION`, `ALK_ASSUMPTION`, `CONSTANT_VOLUME_ASSUMPTION`;
+  - `kinetic_assumptions` and `candidate_assumptions`;
+  - an `assumptions` column on every M6 table.
+
+  The `alkalinity_*` rows name K_ALK = 0.5 meq/L (ASM3), and the closed balance A = Alk0 − 2 n/M_N with "an alkalinity limitation, not an inorganic-carbon limitation". `model.md` adds a paragraph saying that the inverted C(t) inherits K_NH through the joint fit. No candidate was renamed: the names are keys in tests, fixtures and the reports, and the label and the paragraph state the scope. No CO2 term was added; that would be a new model and a new fit.
+- **G8.** `model.m6_tables` adds `nh4_observation_model` (`M6_log`) and `nh4_series` at write time to the seven M6 tables and to `nh4_truth_vectors.csv`. The series is `M6_state:<model>`, plus "(SCENARIO evaporation X mL/d)" in `model_volume_scenarios.csv`. Two tables differ:
+  - `model_response_fractions.csv` names the provenance per column: model fraction `M6_log` and `M6_state:biomass_decay`, observed fraction `electrode_reading`.
+  - `model_volume_scenario_summary.csv` names the scenario C_inv (not saved), and adds `constant_volume_nh4_series` = `C_inv:c29e26a0fb89`.
+
+  `model.check_m6_provenance` raises `ObservationModelError` on a missing or wrong column before a table is written. `nh4_truth_w2_consistency.csv` gains `nh4_observation_model`, `nh4_truth_id` and `assumptions` from its constant-volume balance rows, and is checked by `check_single_observation_model`.
+
+  The report renders these tables without the provenance columns, with one "Provenance of every row" line instead.
+
+### Tests
+
+New `tests/test_pass6_fixes.py`, 30 tests (26 without the run-all fixture):
+
+| Type | Tests |
+| --- | --- |
+| Positive | The hash equals the one in `docs/states_registration.md`, and the status text names both revisions. The null response has the stated AR(1) and slope structure. Coverage is counted correctly and is deterministic. `candidate_assumptions` per candidate type, and the volume-scenario label. `m6_tables` on a `ModelResult` built from the committed CSVs: every value unchanged and the provenance correct. `row_assumptions` for each kind of row. `label_assumptions` on the committed `pulses.csv`. |
+| Negative | Parametrized mutations of a rule, a threshold, a seed or a decision function change the hash. Groups too small for an interval give "no interval". A missing or wrong provenance or series column in each M6 table raises `ObservationModelError`. A W2-consistency table with two series raises. |
+| Boundary | `interval_reading` at coverage exactly 0.90 is "adequate"; the next float below (`nextafter`) is `UNDER-COVERS`. |
+| Integration (real record) | Each M6 table carries the provenance and assumptions. The W2-consistency table names the one inverted series. Every pulse row carries its assumptions. The states tables carry the hash and status, every computed interval has a null reading, and the report states them. |
+
+Two existing tests were extended so they keep passing with the appended columns (disclosed). Every earlier assertion is kept.
+
+- `test_pass4_fixes.test_real_selection_fit_and_model_based_numbers_equal_pass3` compares the fixtures' columns exactly. The extra columns must be exactly `nh4_observation_model`, `nh4_series`, `assumptions` (none for `nh4_truth_summary`).
+- `test_pass5_fixes.test_real_pre_existing_columns_equal_8e10d0e` allows exactly the pass-6 columns (`PASS6_COLS`) after the pass-5 ones.
+
+Development notes (disclosed):
+
+1. After `f1744fc`, the states, pulses and report stages were run twice on a scratch copy of the baseline outputs (a preview; discarded). The first preview gave the G2 results below. Between the two previews, only the report rendering of the provenance columns changed: one line instead of a column, to avoid repeating the long text per row. No code of `states.py` changed between them.
+2. Two bugs were found by the new unit tests before any full run (fixed before the first full run):
+   - an empty pandas Series default filled with NaN, which is truthy, so the null model got NaN as a "volume scenario";
+   - a missing series column raised `KeyError` instead of `ObservationModelError`.
+
+3. A first full validation run (`rm -rf outputs && uv run python -m bnr_neq run-all`, 2026-10-26, exit 0, 3:08:56 wall) was followed by a check of every row label of `pulses.csv` against its `basis`, which found a labelling error of mine. The volume-free set included `fa_median_*` and `delta_A_*`, so 24 rows were labelled "none beyond the metric name" although they depend on the volume assumption:
+   - FA from the M6-inverted C(t) scales with V0/V(t) under evaporation;
+   - ΔA uses ΔC = dose/V0.
+
+   I stopped the full pytest run started after it, after about 4 minutes (51 tests had passed, none had failed). Then I narrowed the set to FA from the electrode reading and corrected the unit test, which had encoded the same error. The test now also checks, without the regex, that every row computed from C_inv or the model state names its volume frame, with the window count `o2_windows_computed` exempt by name. The fix changes only the `assumptions` text of those 24 rows. The validation below is the run after it. The first run is compared with it under "Changed outputs".
+
+### Results
+
+**G2.** Coverage of 0 at nominal 0.95, by φ = 0.5, 0.9, 0.95, 0.98, from `states_bootstrap_null_coverage.csv` (200 of 200 replicates computed in every cell; median block 101 bins):
+
+| Comparison | Coverage by φ | Reading |
+| --- | --- | --- |
+| pH rising vs not (pooled) | 0.850, 0.870, 0.885, 0.900 | UNDER-COVERS (min 0.85) |
+| pH rising vs not (within pulse intervals) | 0.855, 0.840, 0.855, 0.885 | UNDER-COVERS (min 0.84) |
+| active_nitrification vs inactive_oversupplied (descriptive) | 0.825, 0.820, 0.805, 0.815 | UNDER-COVERS (min 0.805) |
+
+The four other comparisons have no interval (fewer than 2 blocks in a group) and so are not checked.
+
+What the readings mean:
+
+- **pH comparisons.** Their intervals already include 0 (−0.81 to 2.51 and −0.82 to 2.61 mg N/L/d), so no association was claimed. The finding is that even these intervals are too narrow.
+- **State against state (active_nitrification vs inactive_oversupplied).** Its interval excludes 0 (1.02 to 5.83). It is labelled UNDER-COVERS and is not evidence of a difference. It was already descriptive only, because the states are defined with the NH4 slope.
+- **The block rule.** It stays as registered.
+
+So the W3 association question has no answer from these data, as before, now with a stated reason that the intervals themselves are too narrow.
+
+**Labels.**
+
+- `pulses.csv`, 352 rows:
+  - 248: constant volume only;
+  - 28: constant volume plus K_NH (the rows computed from the `biomass_decay` model state, `M6_state:biomass_decay`);
+  - 16: constant volume plus the ORP SCENARIO (the W3 state metrics);
+  - 12 each: evaporation 0.25, 0.5 and 1 mL/d;
+  - 24: none beyond the metric name (times, median pH, the O2 window count, and FA from the electrode reading, whose SCENARIO temperature is in the name).
+- `model_fit.csv`: `biomass_decay` and `alkalinity_limited` name K_NH; the three `alkalinity_*` candidates name K_ALK and the closed balance; the Haldane, combined and alkalinity × FA candidates name their FA temperature SCENARIO; every row names constant volume, or its evaporation SCENARIO in `model_volume_scenarios.csv`.
+- `nh4_truth_w2_consistency.csv`: `M6_log`, `C_inv:c29e26a0fb89`, "constant volume V0 (the primary frame); SCENARIO: Alk0 scanned over 1-15 meq/L".
+
+### Changed outputs against the merged pass 5 (`0f7abfc`; final run; every change)
+
+`diff -rq` of the final `outputs/` against a copy of the committed outputs taken before any edit, then a column-by-column comparison of every changed table (`pandas.Series.equals` on each pre-existing column, and the column order):
+
+- **Unchanged (byte-identical):** all of `processed/`, every other table, every figure except fig4, and every other report.
+- **Pre-existing columns:** row counts unchanged, column order kept, and every value identical in every changed table, with one exception: the `thresholds` text of `states_rules.csv`, which gains the ORP SCENARIO (G3).
+- **New columns:**
+
+  | Table | New columns | Gap |
+  | --- | --- | --- |
+  | `model_fit.csv`, `model_calibration_starts.csv`, `model_volume_scenarios.csv`, `model_identifiability.csv`, `model_checks.csv`, `nh4_truth_vectors.csv` | `nh4_observation_model`, `nh4_series`, `assumptions` | G6 to G8 |
+  | `model_response_fractions.csv` | the per-column provenance, `assumptions` | G6 to G8 |
+  | `model_volume_scenario_summary.csv` | `nh4_observation_model`, `nh4_series`, `constant_volume_nh4_series`, `assumptions` | G6 to G8 |
+  | `nh4_truth_w2_consistency.csv` | `nh4_observation_model`, `nh4_truth_id`, `assumptions` | G8 |
+  | `pulses.csv` | `assumptions` | G4 |
+  | `states_fractions.csv` | `assumptions` | G3 |
+  | `states_comparison.csv` | `registration_sha256`, `registration_status`, `null_coverage_min`, `interval_reading`, `assumptions` | G1 to G3 |
+  | `states_rules.csv` | `registration_sha256`, `registration_status` | G1 |
+
+- **New table:** `states_bootstrap_null_coverage.csv` (12 rows; G2).
+- **Reports:**
+  - `analysis_report.md`: §1 point 6 (status and under-coverage), §3 (hash and status, the comparison table with the null reading, the null-coverage table), three "Provenance of every row" lines, methods point 16 (status and ORP SCENARIO), and the index descriptions of three tables.
+  - `states.md`: heading, status and hash, assumptions line, null paragraph and table.
+  - `pulses.md`: consistency assumptions stated once.
+  - `model.md`: the G6/G7 paragraph.
+- **fig4 (PNG and SVG):** the panel c title only, "registered rules, revised after first results" instead of "pre-registered rules".
+
+The first validation run (development note 3) and the final run are byte-identical in every table, report, figure and `processed/` file except `pulses.csv`. There, only the `assumptions` text of the 24 corrected rows differs: `fa_median_mgNH3_L_SCENARIO_T20C`/`T25C`, `delta_A_kJ_mol_SCENARIO_T20C`/`T25C` and `delta_A_SENSITIVITY_reading_as_TAN_kJ_mol_SCENARIO_T20C`/`T25C`, 4 pulses each, from "none beyond the metric name" to the constant-volume ASSUMPTION.
+
+### Commands and results
+
+Environment: CPython 3.14.8, uv 0.13.5, default worker count (all 10 cores), on a machine shared with other processes, so wall times are long. The baseline was not regenerated: the comparison is against the committed outputs of `0f7abfc`, copied before any edit.
+
+Development runs (not the validation):
+- the fast pass-6 tests (`26 passed, 4 deselected`);
+- a fast subset of the touched test files (85 passed);
+- the two stage previews and the first full run-all (development notes 1 and 3);
+- the stopped pytest run (note 3).
+
+Final code (after the last edit), in the working tree:
+
+```
+$ uv run ruff check
+All checks passed!
+$ rm -rf outputs && uv run python -m bnr_neq run-all        # exit 0, 2:34:32 wall (real 9271.99 s)
+ingest: 1 row(s) dropped
+validate: verdicts nh4/ec/orp FAIL, ph PASS (unchanged)
+segments: references 11/13 reproduced
+thermo: references 9/11 reproduced
+dynamics: estimator validation 28/28 required checks passed
+model: selected biomass_decay; consistency checks pass; 13/15 parameters identifiable
+states: 12 % of the record classified (coverage); idle (inactive, over-supplied) between 5 and 93 % of stirred time
+pulses: 274 metrics computed, 78 not computed
+report: wrote outputs/reports/analysis_report.md
+$ diff -rq <baseline copy of outputs/> outputs                 # 18 files differ, 1 new; listed under "Changed outputs"
+$ uv run pytest -q -rs                                       # after the run-all, not concurrently
+488 passed in 25258.43s (7:00:58)
+```
+
+The count is 488:
+- the 458 tests of pass 5, none removed (the two extended ones are listed under "Tests");
+- 30 in the new `tests/test_pass6_fixes.py`.
+
+No test was skipped (`-rs` lists none). The suite includes the two fresh run-all executions with byte-identical CSV and SVG outputs (`test_main.test_run_all_is_deterministic`), and the four real-record pass-6 tests.
+
+No code changed after these runs: the SHA-256 of every file under `src/` and `tests/`, plus `docs/states_registration.md`, `pyproject.toml` and `uv.lock`, was the same before the run-all and after pytest. The registration hash in `docs/states_registration.md` still matches the code (`test_code_matches_the_registered_rules`).
+
+Open:
+- G5, a primary source for the field AE range, waits for the user;
+- everything after `f1744fc` is uncommitted.
+
+Pass 6 is an implementer's log, not an approval; the reviewer decides.
+
+## Remediation pass 6, G5: a primary source for the field aeration efficiency range (2026-10-27)
+
+Scope: G5 of the pass-6 audit. The AE SCENARIO range (`scenarios.sae_field_kgO2_per_kWh`, 0.3 / 1.0 / 2.6 kg O2/kWh) was sourced from lecture notes (Stenstrom and Rosso 2010) that say their table is "not for design". The user supplied three references in `reference/` (untracked; not committed). This section was written before any edit or run of G5.
+
+### Verification of the supplied references (before any edit)
+
+- **Gresch, Armbruster, Braun and Gujer (2011),** Water Research 45, 810–818 (doi:10.1016/j.watres.2010.09.009). Read in full: it gives no aeration efficiency in kg O2/kWh. Its only energy figure is an aeration power density of 10–30 W/m³, quoted from Metcalf & Eddy (2003). Not used.
+- **Azis@Aziz, Ramli and Hamid (2019),** Desalination and Water Treatment 156, 38–45 (doi:10.5004/dwt.2019.24134). Read in full: blower power and kWh only, no oxygen transferred. Not used.
+- **`reference/wastewater_aeration_efficiency_literature.md`.** A secondary summary dated 2026-10-27. Each number it cites was checked against its primary source where that source was readable:
+  - **Crawford and Sandino (2010), Table 2-8: verified** against the report PDF. The source is Crawford G. and Sandino J. (2010), *Energy Efficiency in Wastewater Treatment in North America: A Compendium of Best Practices and Case Studies of Novel Approaches*, WERF report OWSO4R07e, CH2M HILL Canada, Table 2-8 "Aeration Efficiency", p. 2-20, "Based on WEF MOP FD-13 Table 5.1 with additional content" and cited in the text as WEF (2009), MOP 32. The table has 10 rows; the summary reproduced 5. Field-condition values (kg O2/kWh):
+
+    | Aerator type | Field |
+    | --- | --- |
+    | fine-pore¹ | 2.5–3.5 |
+    | coarse bubble¹ | 1.0–2.0 |
+    | surface centrifugal, low speed | 0.7–1.4 |
+    | surface centrifugal, draft tube | 0.7–1.3 |
+    | surface axial, high speed | 0.7–1.2 |
+    | downdraft open turbine | 0.6–1.2 |
+    | downdraft closed turbine | 0.7–1.3 |
+    | submerged turbine, sparger¹ | 0.7–1.1 |
+    | submerged impeller | 0.7–1.1 |
+    | surface brush and blade | 0.5–1.1 |
+
+    ¹ Footnote: "Includes blower power requirements". The table states no operating DO or alpha for the field values.
+  - **Baeten et al. (2021),** Sci. Total Environ. 787, 147651, "1.53 kg O2/kWh under process conditions": **not verified.** The full text is closed access. The abstract (TU Delft research portal) reports aeration characteristics but gives no kg O2/kWh value. Not used.
+  - **The other studies in the summary** (Côté 2015, Adel 2019, Thakre 2009, Roy 2021, Mahmud 2024) are laboratory, pilot or clean-water (standard) values, which the summary itself says not to use as field values. The Ontario table is clean-water SAE. Not used.
+
+### Decision (fixed before any edit or run)
+
+- **Rows.** The AE SCENARIO range comes from the field column of Crawford and Sandino (2010), Table 2-8, restricted to the diffused-air rows marked "Includes blower power requirements": fine-pore, coarse bubble, and submerged turbine with sparger. The pulse metrics convert O2 into the aeration energy of a blower-aerated BNR plant, so only rows whose energy basis includes the blower are comparable.
+- **Values.** Low = the lowest field value of those rows, **0.7**. High = the highest, **3.5**. Central = their geometric mean √(0.7 x 3.5) = 1.565, rounded to two significant figures, **1.6**. AE enters every energy metric as 1/AE, so the geometric mean is the same factor (about 2.2) from each end.
+- **What follows from that.** The metric suffixes change from AE0.3 / AE1 / AE2.6 to AE0.7 / AE1.6 / AE3.5. Every aeration-energy value, every Gibbs-to-aeration ratio, and the AE text in `pulses.csv`, the reports and fig1 change with them. Nothing else may change.
+- **Retained as cross-checks, not as the source.**
+  - Stenstrom and Rosso (2010), 0.3–2.6 in process water at 2 mg/L DO, with its "not for design" caveat. It extends below the new low end (coarse bubble, low SRT).
+  - Moore (2021), 0.61–1.40 at alpha 0.84 and 2 mg/L DO.
+- **DO wording.** Table 2-8 does not state the field DO, so "AE defined at about 2 mg/L DO" is replaced by "field AE at the plant's operating DO (not stated in Table 2-8; the cross-check sources state 2 mg/L)". The capacity at DO = 0 is still divided by an AE at an operating DO above 0, so the supply-based energy remains an upper bound.
+
+### What changed (after the decision above)
+
+- `config/experiment.toml`: `sae_field_kgO2_per_kWh = [0.7, 1.6, 3.5]`; `sae_source` names Crawford and Sandino (2010), Table 2-8, with the three diffused-air rows, and keeps Stenstrom and Rosso (2010) and Moore (2021) as cross-checks. The comment states the rule.
+- `src/bnr_neq/pulses.py` and `src/bnr_neq/report.py`: the AE text. "At about 2 mg/L DO" and "defined at DO = 2 mg/L" become "at the plant's operating DO (> 0)", and the methods text adds "not stated in the source table". This is shorter than the wording registered above: the parenthesis about the cross-check sources stating 2 mg/L was not used in the generated text, and the cross-checks are only named in `sae_source`. The §2 text now compares standard and field values from Table 2-8 (fine pore 5.0-6.5 against 2.5-3.5) and states the rule. The Stenstrom "not for design" caveat was removed from the report, because that table is no longer the source.
+- `tests/test_pass6_fixes.py`: `test_field_ae_range_is_the_registered_rule_on_table_2_8` holds the three diffused-air rows of Table 2-8 as literals and recomputes the rule from them. The config range must equal both the computed values and `[0.7, 1.6, 3.5]`. The source string must name Crawford and Sandino (2010), Table 2-8 and the report number.
+
+### Changed outputs against the committed pass 6 (`ba394df`)
+
+`diff -rq` against a copy of the committed outputs taken before any G5 edit shows 7 files changed and none added or removed:
+- `tables/pulses.csv`;
+- `reports/pulses.md` and `reports/analysis_report.md`;
+- `figures/fig1_linkage.{png,svg}` and `figures/fig8_efficiency.{png,svg}`.
+
+The decision above predicted fig1 but did not name fig8. Panel d of fig8 plots energy per N removed with AE whiskers, so it depends on AE as well.
+
+- **`pulses.csv`:** 352 rows before and after; same columns and order. Columns that changed: `metric`, `value`, `basis`.
+  - **The 244 rows without an AE suffix** are byte-identical.
+  - **The 108 AE rows:**
+    - after mapping AE0.3/AE1/AE2.6 to AE0.7/AE1.6/AE3.5, the metric names match one to one, in the same order;
+    - every computed value is the old value times AE_old/AE_new (energy) or AE_new/AE_old (Gibbs-to-aeration ratio), to 1e-9 relative;
+    - their `basis` text changes only in the AE source and DO wording;
+    - every other column is unchanged.
+  - **Metric kinds:** `aeration_energy_demand_Wh`, `aeration_energy_demand_kWh_per_kgN`, `aeration_energy_supply_kWh_per_kgN`, `gibbs_to_aeration_energy_demand`, `gibbs_to_aeration_energy_supply`.
+- **`pulses.md`:** the same names, values and text. "Not computed" reasons are unchanged; only their metric names changed.
+- **`analysis_report.md`:**
+  - the demand-based floor of 4.57 g O2/g N changes from 1.76-15.23 to 1.31-6.53 kWh/kg N (= 4.57/3.5 to 4.57/0.7);
+  - the central AE changes from 1 to 1.6, so the kLa 1/10/100 supply energies change from 6.8/21.9/99.7 to 4.2/13.7/62.3 kWh/kg N (÷ 1.6);
+  - the Gibbs-to-aeration ratios are multiplied by 1.6 (0.316 → 0.506; 0.0694 → 0.111);
+  - the AE source, the rule and the DO wording change as listed above.
+- **fig1:** the scenario label changes from 0.3-2.6 to 0.7-3.5.
+- **fig8 panel d:** the whiskers span AE 0.7-3.5 and the markers sit at AE 1.6.
+
+Nothing else changed: no verdict, state or model output, and no table other than `pulses.csv`. The changed numbers are all SCENARIO values.
+
+### Commands and results (G5)
+
+Environment as for pass 6. The machine was shared with another long CPU-bound process for the whole validation, so wall times are longer than in pass 6. Ruff, run-all and pytest ran one after another, not concurrently.
+
+```
+$ uv run ruff check
+All checks passed!
+$ rm -rf outputs && uv run python -m bnr_neq run-all        # exit 0, 3:37:32 wall (real 13051.91 s)
+(stage lines identical to pass 6: references 11/13 and 9/11, 28/28 estimator checks,
+ 13/15 parameters identifiable, 12 % classified, 274 metrics computed, 78 not computed)
+$ diff -rq <copy of the ba394df outputs> outputs                # 7 files differ; listed above
+$ uv run pytest -q -rs                                       # after the run-all
+489 passed in 24790.51s (6:53:10)
+```
+
+- **Test count, 489:** the 488 tests of pass 6, plus the new G5 test.
+- **Skips:** none.
+- **Determinism:** the suite again includes the two fresh run-all executions with byte-identical CSV and SVG outputs.
+- **Code hashes:** the SHA-256 of every file under `src/` and `tests/`, `config/experiment.toml`, `docs/states_registration.md`, `pyproject.toml` and `uv.lock` was the same before the run-all and after pytest.
+
+Open: none from the pass-6 audit. Baeten et al. (2021) stays unverified and unused. Pass 6 is an implementer's log, not an approval; the reviewer decides.

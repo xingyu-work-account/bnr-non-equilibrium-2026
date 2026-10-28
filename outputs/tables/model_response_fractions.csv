@@ -1,5 +1,5 @@
-pulse,model_response_fraction,observed_response_fraction
-1,0.3538530034378551,0.3704249526026941
-2,0.2790035158603904,0.2900060868119075
-3,0.1834891248558144,0.2617764554576196
-4,0.19107971085695252,0.1743594877764843
+pulse,model_response_fraction,observed_response_fraction,model_response_fraction_nh4_observation_model,model_response_fraction_nh4_series,observed_response_fraction_nh4_observation_model,assumptions
+1,0.3538530034378551,0.3704249526026941,M6_log,M6_state:biomass_decay,electrode_reading,"ASSUMPTION: K_NH = 1 mg N/L fixed (ASM1 default, not fitted); ASSUMPTION: constant volume V0 (evaporation not measured)"
+2,0.2790035158603904,0.2900060868119075,M6_log,M6_state:biomass_decay,electrode_reading,"ASSUMPTION: K_NH = 1 mg N/L fixed (ASM1 default, not fitted); ASSUMPTION: constant volume V0 (evaporation not measured)"
+3,0.1834891248558144,0.2617764554576196,M6_log,M6_state:biomass_decay,electrode_reading,"ASSUMPTION: K_NH = 1 mg N/L fixed (ASM1 default, not fitted); ASSUMPTION: constant volume V0 (evaporation not measured)"
+4,0.19107971085695252,0.1743594877764843,M6_log,M6_state:biomass_decay,electrode_reading,"ASSUMPTION: K_NH = 1 mg N/L fixed (ASM1 default, not fitted); ASSUMPTION: constant volume V0 (evaporation not measured)"
