@@ -305,7 +305,7 @@ def test_real_states_are_registered_and_every_interval_is_read_against_the_null(
     assert (comp.loc[comp["status"] != "computed", "interval_reading"] == "no interval").all()
     rep = (run_all_dir / "reports" / "analysis_report.md").read_text()
     states_md = (run_all_dir / "reports" / "states.md").read_text()
-    for text in (rep.split("## 3.")[1].split("## 4.")[0], states_md):
+    for text in (rep.split("## 4.")[1].split("## 5.")[0], states_md):
         assert ST.REGISTRATION_STATUS in text and h in text
     assert "Pre-registered rules" not in rep and "pre-registered rules" not in rep
 

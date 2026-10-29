@@ -302,6 +302,8 @@ def test_run_writes_outputs(cfg, ingested, tmp_path):
     pipeline.write_ingest(ingested, tmp_path)
     validation.run(cfg, tmp_path)
     S.run(cfg, tmp_path)
-    for rel in ("tables/segments.csv", "figures/fig2_overview.png", "figures/fig2_overview.svg",
-                "reports/segments.md", "tables/kinetic_fits.csv", "tables/changepoints.csv"):
+    figs = [f"figures/{stem}.{ext}" for stem in ("fig2a_overview_NH4_slope_windows_jumps_held", "fig2b_overview_pH",
+                                                 "fig2c_overview_ORP_relative", "fig2d_overview_EC_unvalidated")
+            for ext in ("png", "svg")]
+    for rel in ("tables/segments.csv", *figs, "reports/segments.md", "tables/kinetic_fits.csv", "tables/changepoints.csv"):
         assert (tmp_path / rel).is_file()

@@ -248,12 +248,12 @@ def test_real_report_states_the_skill_range_and_the_limits(run_all_dir):
     alk = fit.loc["alkalinity_limited"]
     inside = st[(st["model"] == "alkalinity_limited") & st["inside_95"]]
     assert int(alk["n_starts_inside_95"]) == len(inside)
-    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
-    if len(inside) > 1:  # the range of the indistinguishable starts is in the §4 table (pass 5, Z4; was §1 point 7)
+    sec5 = rep.split("## 5.")[1].split("## 6.")[0]
+    if len(inside) > 1:  # the range of the indistinguishable starts is in the model-section table (§5, §4 before the W7 reorder; pass 5, Z4; was §1 point 7)
         for c in ("sel", "test", "forecast"):
             v = inside[f"{c}_skill_vs_null_diagnostic"]
             assert alk[f"{c}_skill_min_inside_95"] == pytest.approx(v.min())
-            assert f"{v.min():.3f} to {v.max():.3f}" in sec4
+            assert f"{v.min():.3f} to {v.max():.3f}" in sec5
     assert "holds against every converged start" in point7 or "does not hold against" in point7
     for name, g in st.groupby("model"):  # the chosen start reproduces the candidate's own skills
         ch = g[g["chosen"]].iloc[0]
@@ -265,7 +265,7 @@ def test_real_report_states_the_skill_range_and_the_limits(run_all_dir):
     cov = pd.read_csv(run_all_dir / "tables" / "states_interval_coverage.csv")
     ref = cov[cov["reference"]].iloc[0]
     phrase = f"{ref['coverage_scaled_estimated_rho']:.2f} of the windows at φ = {ref['phi']:g}"
-    for text in (point8, rep.split("## 3.")[1].split("## 4.")[0], states_md):
+    for text in (point8, rep.split("## 4.")[1].split("## 5.")[0], states_md):
         assert phrase in text and "conditional on the state classification" in text
     row = next(line for line in rep.splitlines() if line.startswith("| Model selection, activity decay"))
     for m in fit.index[~fit["cal_converged"].astype(bool)]:

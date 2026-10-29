@@ -15,7 +15,7 @@ IMPLEMENTED = ("ingest", "validate", "segments", "thermo", "dynamics", "model", 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m bnr_neq")
-    parser.add_argument("command", choices=[*IMPLEMENTED, *NOT_IMPLEMENTED, "run-all"])
+    parser.add_argument("command", choices=[*IMPLEMENTED, *NOT_IMPLEMENTED, "run-all", "figures"])
     parser.add_argument("--config", type=Path, default=CONFIG_PATH)
     parser.add_argument("--data-dir", type=Path, default=io.DATA_DIR)
     parser.add_argument("--out-dir", type=Path, default=pipeline.OUTPUT_DIR)
@@ -27,6 +27,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     cfg = load_config(args.config)
+    if args.command == "figures":  # redraw every figure from the saved outputs; no stage is rerun
+        from . import figures
+
+        written = figures.make_all(cfg, args.out_dir)
+        print(f"figures: wrote {len(written)} figures (PNG and SVG) to {args.out_dir}/figures")
+        return 0
     steps = IMPLEMENTED if args.command == "run-all" else (args.command,)
     for step in steps:
         if step == "ingest":

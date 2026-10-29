@@ -1451,3 +1451,79 @@ $ uv run pytest -q -rs                                       # after the run-all
 - **Code hashes:** the SHA-256 of every file under `src/` and `tests/`, `config/experiment.toml`, `docs/states_registration.md`, `pyproject.toml` and `uv.lock` was the same before the run-all and after pytest.
 
 Open: none from the pass-6 audit. Baeten et al. (2021) stays unverified and unused. Pass 6 is an implementer's log, not an approval; the reviewer decides.
+
+## W6 and W7: Figures 1, 4 and 8, report order, consistency-check labels, precision, plotting rules (2026-10-28)
+
+Scope:
+- **W6:** Figures 1, 4 and 8 as specified.
+- **W7:** reorder `analysis_report.md`: process narrative, then energy and efficiency, then sensor validity. The stochastic-thermodynamic results stay in Supplement S1. Label the coexistence affinity, the affinity step ΔA and the σ ≥ 0 check as consistency checks, and round every value to meaningful precision.
+- **Plotting rules for every figure:**
+  - one canvas and one axes, figsize (10, 6);
+  - all four spines, no title, no tight layout, no grid;
+  - the figure's content goes in the file name;
+  - 300 dpi PNG and SVG on a transparent background;
+  - the project rcParams: font size 25, Arial, weight 600, axes linewidth 3, subplot box 0.23/0.95/0.18/0.92, lines linewidth 3.
+
+### What changed
+
+- **`src/bnr_neq/figures.py`** holds all plotting:
+  - `PARAMS`, `FIGSIZE`, `_new()` (one axes, spines on, grid off) and `_save()`, which writes PNG and SVG at 300 dpi with `transparent=True` plus a text-free copy in `figures/no_text/`.
+  - The old multi-panel figures are split into single-axes figures. There are now 29 figures with descriptive stems, for example `fig8d_aeration_energy_per_N_removed_AE_kLa_SCENARIO`. `FIGURE_GROUPS` holds each group caption and the panel captions.
+  - `make_w6` draws Figures 1, 4 and 8. `make_all` redraws every figure from the saved tables; it backs the new `figures` CLI command.
+- **Fig. 1** is redrawn as a 3 × 3 chain at the fixed 25 pt font: Sensors → C(t) (M6 inverse) → State → Rates → O2 demand → Energy → Efficiency, plus the W2 bound.
+  - Every box shows one key number taken from the outputs: verdicts, idle range, 4.57 g O2/g N, AE range.
+  - The box border gives the basis (measured, model or scenario).
+- **Fig. 8:**
+  - c draws the "conditional" marker and its legend entry only when a value exists;
+  - b and d write "n.c." at pulses where no series was computed (the reason is in `pulses.csv`).
+- **Fig. 7b's caption** starts with "CONSISTENCY CHECK (not a finding)".
+- **`src/bnr_neq/report.py`:**
+  - "Sensor validity" moves from §5 to §3; process state becomes §4 and the reduced model §5. §1, §2, §6, §7, S1 and S2 keep their place.
+  - Cross-references "§4" become "§5", here and in two `model.py` docstrings.
+  - S2 now states that ΔA and the coexistence affinity are CONSISTENCY CHECKS (not findings; §6). §6 already labelled ΔA, the coexistence affinity and σ ≥ 0 that way.
+- **Precision:**
+  - The nitrogen and alkalinity balance tables go through `numeric_cells` and print at 3 significant figures. Before, their mixed text/number `value` column bypassed rounding, for example `13.009538747950954`.
+  - The data-properties table prints at 4 significant figures instead of 6.
+  - Values with 5 or more significant digits remain only for the configured inputs 0.77649 (NH4 to N) and the EC calibration −2.89855/0.52087, which are exact constants.
+- **Tests:**
+  - New `tests/test_figures.py`, with 2 tests:
+    - all 29 figures satisfy the plotting rules on the figure object: 1 axes, (10, 6), no layout engine or suptitle, 4 visible spines, empty titles, no grid, rcParams equal to `PARAMS`;
+    - the saved PNGs, normal and `no_text`, are 3000 × 1800 px at 300 dpi, RGBA with a transparent corner, and each has an SVG.
+  - Section slices in `test_pass4_fixes.py`, `test_pass5_fixes.py` and `test_pass6_fixes.py` follow the new numbering.
+  - `test_report.py`, `test_segments.py` and `test_validation.py` follow the new figure stems.
+
+### Changed outputs against the committed pass 6 (`da49e95`)
+
+- **Tables:** none changed. No verdict, state, model, pulse or balance number changed.
+- **`reports/analysis_report.md`:**
+  - the section order and numbering;
+  - the consistency-check sentence in S2;
+  - the balance and data-properties tables are rounded as above;
+  - the figure blocks follow the new stems and captions.
+- **Figures:**
+  - the 16 old files `figures/fig{1..8}_*.{png,svg}` are removed;
+  - 29 PNG + 29 SVG with descriptive stems are added in `figures/`, plus the same 58 in `figures/no_text/`.
+- **Determinism:** `diff -rq` between a copy of `outputs/` taken just before the clean run and the regenerated `outputs/` shows no differences except Finder's `.DS_Store` files.
+
+### Commands and results (W6/W7)
+
+Ruff, run-all and pytest ran one after another.
+
+```
+$ uv run ruff check                                          # exit 1: RUF059, unused `out` in tests/test_figures.py:39
+$ rm -rf outputs && uv run python -m bnr_neq run-all        # exit 0, 3:08:32 wall (11312 s)
+(stage lines identical to G5: references 11/13 and 9/11, 28/28 estimator checks,
+ 13/15 parameters identifiable, 12 % classified, 274 metrics computed, 78 not computed)
+$ uv run pytest -q -rs                                       # exit 0
+491 passed in 20651.04s (5:44:11)
+# after the run: `out, seen = drawn` -> `_, seen = drawn` in tests/test_figures.py:39
+$ uv run ruff check
+All checks passed!
+```
+
+- **Test count, 491:** the 489 tests of G5, plus the 2 figure tests.
+- **Skips:** none.
+- **The ruff fix** renames an unused variable after pytest ran. pytest was not rerun for it, because the rename does not change what the test asserts. Code hashes were not recorded for this run.
+- **Font warnings:** matplotlib warns that Arial has no weight 600 and draws the nearest weight, 700 (bold). The rcParams are applied exactly as specified.
+
+Open: none. This is an implementer's log, not an approval; the reviewer decides.

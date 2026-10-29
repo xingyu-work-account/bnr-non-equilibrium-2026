@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bnr_neq import report as R
 from bnr_neq import validation
 
 
@@ -91,8 +92,9 @@ def test_run_writes_outputs(cfg, ingested, tmp_path):
 
     pipeline.write_ingest(ingested, tmp_path)
     validation.run(cfg, tmp_path)
-    for rel in ("tables/sensor_validation.csv", "figures/fig3_sensor_validation.png",
-                "figures/fig3_sensor_validation.svg", "reports/sensor_validation.md"):
+    figs = [f"figures/{png[:-4]}.{ext}" for png, _ in R.FIGURES if png.startswith("fig3") for ext in ("png", "svg")]
+    assert len(figs) == 12  # fig3a-f, PNG and SVG
+    for rel in ("tables/sensor_validation.csv", *figs, "reports/sensor_validation.md"):
         assert (tmp_path / rel).is_file()
     pt = pd.read_csv(tmp_path / "tables/sensor_validation.csv")
     assert len(pt) == 4

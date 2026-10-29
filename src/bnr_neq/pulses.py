@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from . import alkalinity, energy, model, thermo, volume
+from . import alkalinity, energy, figures, model, thermo, volume
 from . import segments as S
 from . import states as ST
 from .config import Config, MissingInputError
@@ -946,86 +946,6 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     return PulseResult(m, associations(m), tw, bal, cons, volume_constraints(cfg, inputs))
 
 
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
-
-def figure(cfg: Config, r: PulseResult, png: Path, svg: Path) -> None:
-    from .report import pyplot
-
-    plt = pyplot()
-
-    w = wide(r.metrics)
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), facecolor=SURFACE)
-    for ax in axes.flat:
-        ax.set_facecolor(SURFACE)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(colors=INK2, labelsize=8)
-        ax.grid(True, color=GRID, linewidth=0.6, axis="y")
-        ax.set_axisbelow(True)
-    x = np.arange(len(w))
-    labels = [f"P{int(p)}" for p in w["pulse"]]
-    ax = axes[0, 0]
-    lo, hi = wide(r.metrics, "ci95_low"), wide(r.metrics, "ci95_high")
-    for off, col, color, lab in ((-0.2, "consumption_uncorrected_weighted_mgN_L_d", BLUE, "Electrode reading (measured)"),
-                                 (0.2, RESPONSE, ORANGE, "M6-inverted NH4 (single observation model)")):
-        v = w[col].to_numpy(dtype=float)
-        err = np.vstack([v - lo[col].to_numpy(dtype=float), hi[col].to_numpy(dtype=float) - v])
-        ax.bar(x + off, v, 0.38, color=color, label=lab, yerr=err, error_kw={"ecolor": INK2, "capsize": 3, "lw": 0.8})
-    ax.scatter(x + 0.2, w["consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"], marker="_", s=160, color=INK, zorder=3,
-               label="SENSITIVITY: linear gain correction")
-    ax.axhline(0, color=INK2, lw=0.8)
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("Consumption (mg N/L/d)", fontsize=8.5, color=INK)
-    ax.set_title("a  Consumption after each pulse (positive slope windows, 95 % CI)", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False)
-    ax = axes[0, 1]
-    ax.bar(x, w["delta_A_kJ_mol_SCENARIO_T25C"], 0.55, color=AQUA)
-    for xi, v in zip(x, w["delta_A_kJ_mol_SCENARIO_T25C"]):
-        ax.text(xi, v + 0.05, f"{100 * v / abs(DG0_NITRIFICATION_KJ_MOL_N):.1f} % of |ΔG°′|", ha="center", fontsize=7.5,
-                color=INK2)
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("ΔA at the pulse (kJ/mol, SCENARIO 25 °C)", fontsize=8.5, color=INK)
-    ax.set_title("b  Affinity step on the M6-inverted NH4", loc="left", fontsize=10, color=INK)
-    ax = axes[1, 0]
-    ax.grid(True, color=GRID, linewidth=0.6, axis="x")
-    fa_cols = [c for c in w.columns if c.startswith("fa_median_mgNH3_L_SCENARIO_")]
-    for col, color in zip(fa_cols, (BLUE, VIOLET, AQUA, ORANGE)):
-        lab = col.removeprefix("fa_median_mgNH3_L_SCENARIO_T").removesuffix("C") + " °C SCENARIO"
-        ax.scatter(w[col], w[RESPONSE], color=color, s=40, label=lab)
-        for xi, yi, lb in zip(w[col], w[RESPONSE], labels):
-            ax.annotate(lb, (xi, yi), textcoords="offset points", xytext=(5, 4), fontsize=7.5, color=INK2)
-    ax.axhline(0, color=INK2, lw=0.8)
-    ax.set_xlabel("Median free ammonia from the M6-inverted TAN (mg NH3/L)", fontsize=8.5, color=INK2)
-    ax.set_ylabel("M6-inverted consumption (mg N/L/d)", fontsize=8.5, color=INK)
-    ax.set_title(f"c  Free ammonia vs consumption, {EXPLORATORY}", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False)
-    ax = axes[1, 1]
-    eta = w["eta_conversion_fraction"].to_numpy(dtype=float) if "eta_conversion_fraction" in w else np.full(len(w), np.nan)
-    ax.bar(x - 0.2, np.nan_to_num(eta), 0.38, color=ORANGE, label="Dose-anchored, M6-inverted C(t)")
-    for xi, e in zip(x, eta):
-        if np.isnan(e):
-            ax.text(xi - 0.2, 0.01, "not\ncomputed", ha="center", va="bottom", fontsize=6.5, color=INK2)
-    ax.bar(x + 0.2, w["eta_conversion_fraction_MODEL_BASED"], 0.38, color=VIOLET, label="MODEL-BASED (M6 rate law)")
-    top = np.nanmax(np.r_[eta, w["eta_conversion_fraction_MODEL_BASED"].to_numpy(dtype=float)])
-    ax.set_ylim(0.0, 1.45 * top)
-    ax.legend(fontsize=7.5, frameon=False, loc="upper left")
-    ax.set_xticks(x, labels)
-    ax.set_ylabel(f"η (fraction of the {thermo.pulse_dose_from_config(cfg).n_mg_L:.2f} mg N/L pulse)", fontsize=8.5,
-                  color=INK)
-    ax.set_title("d  Conversion before the next pulse", loc="left", fontsize=10, color=INK)
-    ratio = r.metrics[r.metrics["metric"] == "free_energy_to_stirrer_energy_ratio"]["status"]
-    ratio_txt = "computed" if (ratio == "computed").all() else str(ratio.iloc[0]).removeprefix("not computed: ")
-    ax.text(0.98, 0.97, f"P{len(w)}: until the end of the record ({END_D:g} d).\nEnergy ratios: "
-            + ("computed" if ratio_txt == "computed" else f"not computed ({ratio_txt})"),
-            transform=ax.transAxes, va="top", ha="right", fontsize=7.5, color=INK2)
-    fig.tight_layout()
-    fig.savefig(png, dpi=150, facecolor=SURFACE)
-    fig.savefig(svg, facecolor=SURFACE, metadata={"Date": None})
-    plt.close(fig)
-
-
 def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
     from .report import md_table
 
@@ -1157,6 +1077,6 @@ def run(cfg: Config, out_dir) -> PulseResult:
     r.truth_balance.to_csv(d["tables"] / "nh4_truth_balance.csv", index=False)
     r.consistency.to_csv(d["tables"] / "nh4_truth_w2_consistency.csv", index=False)
     r.volume_constraints.to_csv(d["tables"] / "volume_constraints.csv", index=False)
-    figure(cfg, r, d["figures"] / "fig7_pulses.png", d["figures"] / "fig7_pulses.svg")
+    figures.pulses_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "pulses.md")
     return r

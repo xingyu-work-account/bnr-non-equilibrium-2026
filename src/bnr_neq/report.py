@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import figures as _figures
+
 SVG_HASHSALT = "bnr_neq"  # fixed salt for SVG element ids, so repeated runs write byte-identical SVG files
 
 
@@ -141,16 +143,7 @@ TABLE_DESCRIPTIONS = {
     "all_references.csv": "M8: every reference value of the implementation prompt",
 }
 
-FIGURES = [
-    ("fig1_linkage.png", "Figure 1. From sensor signals to process state, oxygen demand, energy and efficiency (W6)"),
-    ("fig2_overview.png", "Figure 2. Common-window overview with pulses, flags and electrode events (M3)"),
-    ("fig3_sensor_validation.png", "Figure 3. Sensor validation with the known pulses (M2)"),
-    ("fig5_dynamics.png", "Figure 5. Estimator validation, irreversibility, Onsager SNR, probability flux (M5)"),
-    ("fig6_model.png", "Figure 6. Reduced model with the electrode observation model (M6)"),
-    ("fig7_pulses.png", "Figure 7. Pulse-level descriptors (M7)"),
-    ("fig4_constraints.png", "Figure 4. Alkalinity bound, rate against free ammonia, state timeline (W6)"),
-    ("fig8_efficiency.png", "Figure 8. Per-pulse η, oxygen utilization, idle fraction and energy under SCENARIOS (W6)"),
-]
+FIGURES = _figures.FIGURES  # (png, caption) per single-axes figure; grouped in _figures.FIGURE_GROUPS
 
 def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     """Stated assumptions; every number comes from the configuration or a generated table."""
@@ -553,7 +546,7 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          + mechanism_summary_txt(fit, sel, other_mechanism(fit))
          + " " + alk0_sentence(fit, alk_cmp, float(cons.loc[cal_end, "alk0_required_if_nitrified_meq_L"]), cal_end)
          + " With four pulses, time is confounded with activity decay, alkalinity loss, FA and electrode drift "
-         "(ranges, rankings and Alk0 profiles: §4)."),
+         "(ranges, rankings and Alk0 profiles: §5)."),
         (f"8. **Energy and efficiency.** The transferable energy measure is oxygen: 4.57 g O2 per g N removed, i.e. a "
          f"floor of {4.57 / max(saes):.2f}-{4.57 / min(saes):.2f} kWh/kg N at field aeration efficiencies of "
          f"{max(saes):g}-{min(saes):g} kg O2/kWh (SCENARIO). With aeration sized to kLa_O2 = {k_mid:g} 1/d (SCENARIO) "
@@ -803,7 +796,7 @@ def assemble_report(cfg, out_dir) -> Path:
     t["dynamics_windows.csv"] = _read(tables, "dynamics_windows.csv")
     check_required(t)  # raises before anything is written
     refs = all_references(tables)
-    figures.make_all(cfg, t, out_dir)
+    figures.make_w6(cfg, t, out_dir)
     for fig, _ in FIGURES:
         if not (out_dir / "figures" / fig).is_file():
             raise FileNotFoundError(f"{out_dir / 'figures' / fig} missing")
@@ -817,7 +810,9 @@ def assemble_report(cfg, out_dir) -> Path:
     dp = t["data_properties.csv"][["sensor", "file", "rows_valid", "rows_dropped", "t_min_d", "t_max_d", "value_min",
                                    "value_max", "interval_median_s"]]
     pm = t["pulses.csv"]
-    fig = {f: f"![{c}](../figures/{f})\n\n*{c}*\n" for f, c in FIGURES}
+    fig = {key: f"*{caption}*\n\n" + "".join(f"![{panel}](../figures/{stem}.png)\n\n*{panel}.*\n\n"
+                                             for stem, panel in panels)
+           for key, caption, panels in _figures.FIGURE_GROUPS}
     sc = cfg.raw["scenarios"]
     fit = t["model_fit.csv"]
     lines = [
@@ -831,7 +826,7 @@ def assemble_report(cfg, out_dir) -> Path:
         "## 1. What the data say about the process",
         "",
         *[x + "\n" for x in summary_lines(cfg, t)],
-        fig["fig1_linkage.png"],
+        fig["fig1"],
         "## 2. Energy and efficiency",
         "",
         (f"The metric family per pulse (constant volume; all rows with inputs and status in `pulses.csv`). SCENARIO "
@@ -851,8 +846,19 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         md_table(energy_table(pm), digits=3),
         "",
-        fig["fig8_efficiency.png"],
-        "## 3. Process state and the constraints on conversion",
+        fig["fig8"],
+        "## 3. Sensor validity",
+        "",
+        "From `sensor_verdicts.csv` (criteria fixed before computing the observations):",
+        "",
+        md_table(verdicts),
+        "",
+        md_table(pv[["pulse", "nh4_obs_change_mgNH4_L", "nh4_response_fraction", "ec_obs_change_mS_cm",
+                     "orp_obs_change_mV", "ph_obs_change"]], digits=3),
+        "",
+        fig["fig3"],
+        fig["fig2"],
+        "## 4. Process state and the constraints on conversion",
         "",
         "### Process states (W3)",
         "",
@@ -902,12 +908,12 @@ def assemble_report(cfg, out_dir) -> Path:
         md_table(t["nh4_truth_w2_consistency.csv"].drop(columns=["alk0_scan_max_meq_L", *PROVENANCE_COLUMNS],
                                                         errors="ignore"), digits=3),
         "",
-        fig["fig4_constraints.png"],
+        fig["fig4"],
         "### Water volume (W8)",
         "",
         md_table(t["volume_constraints.csv"], digits=3),
         "",
-        "## 4. Reduced model and mechanism (M6, W5)",
+        "## 5. Reduced model and mechanism (M6, W5)",
         "",
         (f"Convergence policy (one for every candidate): {model.CONVERGENCE_POLICY} A candidate whose calibration did "
          "not converge is excluded from selection (`selection_status`); its skills stay in the table and are not "
@@ -960,18 +966,7 @@ def assemble_report(cfg, out_dir) -> Path:
         md_table(numeric_cells(t["model_identifiability.csv"][["parameter", "estimate", "ci95_low", "ci95_high",
                                                                 "identifiable"]]), digits=3),
         "",
-        fig["fig6_model.png"],
-        "## 5. Sensor validity",
-        "",
-        "From `sensor_verdicts.csv` (criteria fixed before computing the observations):",
-        "",
-        md_table(verdicts),
-        "",
-        md_table(pv[["pulse", "nh4_obs_change_mgNH4_L", "nh4_response_fraction", "ec_obs_change_mS_cm",
-                     "orp_obs_change_mV", "ph_obs_change"]], digits=3),
-        "",
-        fig["fig3_sensor_validation.png"],
-        fig["fig2_overview.png"],
+        fig["fig6"],
         "## 6. Status of the conclusions",
         "",
         md_table(labels),
@@ -1002,12 +997,12 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         onsager_conclusion(t["dynamics_onsager.csv"]),
         "",
-        fig["fig5_dynamics.png"],
+        fig["fig5"],
         "## Supplement S2. Detailed tables",
         "",
         "### Verified data properties",
         "",
-        md_table(dp, digits=6),
+        md_table(dp, digits=4),
         "",
         "### Consumption slopes on the electrode reading (M3; gain-corrected and reading-as-TAN columns are SENSITIVITY)",
         "",
@@ -1023,15 +1018,18 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         "### Thermodynamics and balances (M4)",
         "",
+        ("The affinity steps ΔA below and the coexistence affinity are CONSISTENCY CHECKS (not findings; §6): a log "
+         "ratio of concentrations and an affinity computed from assumed concentrations."),
+        "",
         md_table(t["thermo_affinity_steps.csv"].drop(columns=["note"]), digits=3),
         "",
-        md_table(t["balance_nitrogen.csv"], digits=4),
+        md_table(numeric_cells(t["balance_nitrogen.csv"]), digits=3),
         "",
-        md_table(t["balance_alkalinity.csv"], digits=4),
+        md_table(numeric_cells(t["balance_alkalinity.csv"]), digits=3),
         "",
         "### Pulse-level descriptors (M7)",
         "",
-        fig["fig7_pulses.png"],
+        fig["fig7"],
         md_table(t["pulses_associations.csv"], digits=3),
         "",
         "### Reference values",
