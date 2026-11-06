@@ -222,3 +222,5 @@ __marimo__/
 # Project
 .DS_Store
 outputs/processed/
+# Publisher copies of journal articles: identified by citation and SHA-256 in reference/README.md, not committed
+reference/*.pdf
