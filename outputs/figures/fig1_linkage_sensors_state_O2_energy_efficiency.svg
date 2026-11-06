@@ -63,7 +63,7 @@ L 670.176 45.216
 L 525.024 45.216 
 L 525.024 130.464 
 z
-" clip-path="url(#p6d8c23afca)" style="fill: none; stroke: #2a78d6; stroke-width: 3; stroke-linejoin: miter"/>
+" clip-path="url(#p6d8c23afca)" style="fill: none; stroke: #eb6834; stroke-width: 3; stroke-linejoin: miter"/>
    </g>
    <g id="patch_6">
     <path d="M 525.024 237.024 
@@ -108,7 +108,7 @@ L 324.576 151.776
 L 179.424 151.776 
 L 179.424 237.024 
 z
-" clip-path="url(#p6d8c23afca)" style="fill: none; stroke-dasharray: 11.1,4.8; stroke-dashoffset: 0; stroke: #2a78d6; stroke-width: 3; stroke-linejoin: miter"/>
+" clip-path="url(#p6d8c23afca)" style="fill: none; stroke-dasharray: 11.1,4.8; stroke-dashoffset: 0; stroke: #eb6834; stroke-width: 3; stroke-linejoin: miter"/>
    </g>
    <g id="matplotlib.axis_1"/>
    <g id="matplotlib.axis_2"/>

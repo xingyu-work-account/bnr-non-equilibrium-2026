@@ -220,12 +220,20 @@ def _read(out_dir: Path, rel: str) -> pd.DataFrame:
 
 
 # --- Fig. 1 (W6) -----------------------------------------------------------------------------------------------
-def fig1(t: dict[str, pd.DataFrame], d: Path, saes: list[float]) -> None:
-    """The linkage diagram on a 3 x 3 grid, every label at the rcParams size: a title and one short line per box; the
-    report caption and §1 carry the detail."""
-    from matplotlib.patches import Patch
+# Fig. 1 box border = the basis of the box's number, as the caption and legend define it; a box that rests on any
+# SCENARIO is "scenario", even when it also rests on a model
+FIG1_BASIS_COLORS = {"measured": BLUE, "model": VIOLET, "scenario": ORANGE}
+# the table and rows ((column, value), None = every row) each box's printed number is read from; check_fig1_bases
+# reads their SCENARIO/ASSUMPTION labels
+FIG1_BOX_SOURCES = {"sensors": ("sensor_verdicts.csv", None),
+                    "state": ("states_fractions.csv", ("interval", "whole record")),
+                    "w2": ("nh4_truth_w2_consistency.csv", None)}
+_LABEL_TAGS = ("SCENARIO", "ASSUMPTION")
 
-    plt = _plt()
+
+def fig1_boxes(t: dict[str, pd.DataFrame], saes: list[float]) -> dict[str, tuple[tuple[int, int], str, str, str]]:
+    """Fig. 1 boxes as {key: (cell, title, line, basis)}; the chain runs Sensors → C(t) → State ↓ Rates → O2 ↓
+    Energy → Efficiency, with the W2 bound fed by the sensors."""
     v = t["sensor_verdicts.csv"].set_index("key")["verdict"].astype(str)
     fr = t["states_fractions.csv"].set_index("interval").loc["whole record"]
     cons = t["nh4_truth_w2_consistency.csv"]
@@ -233,26 +241,57 @@ def fig1(t: dict[str, pd.DataFrame], d: Path, saes: list[float]) -> None:
     valid = [k for k in ("ph", "nh4", "orp", "ec") if v[k].startswith("PASS")]
     sensors_line = (" ".join({"ph": "pH", "nh4": "NH4", "orp": "ORP", "ec": "EC"}[k] for k in valid) + " valid"
                     if valid else "none valid")
-    # (cell, title, line, border); the chain runs Sensors → C(t) → State ↓ Rates → O2 ↓ Energy → Efficiency
-    boxes = {
-        "sensors": ((0, 2), "Sensors", sensors_line, BLUE),
-        "ct": ((1, 2), "C(t)", "M6 inverse", VIOLET),
+    return {
+        "sensors": ((0, 2), "Sensors", sensors_line, "measured"),
+        "ct": ((1, 2), "C(t)", "M6 inverse", "model"),
+        # the idle bounds rest on the ORP SCENARIO threshold (25 °C) and on the M6-inverted C(t) (P1-1, pass 6)
         "state": ((2, 2), "State", (f"idle {100 * fr['idle_fraction_lower_bound']:.0f}-"
-                                    f"{100 * fr['idle_fraction_upper_bound']:.0f} %"), BLUE),
-        "rates": ((2, 1), "Rates", "−dC/dt, η", VIOLET),
-        "o2": ((1, 1), "O2 demand", "4.57 g/g N", VIOLET),
-        "energy": ((1, 0), "Energy", f"AE {min(saes):g}-{max(saes):g}", ORANGE),
-        "eff": ((2, 0), "Efficiency", "kWh/kg N", ORANGE),
-        "w2": ((0, 1), "W2 bound", "C(t) fails" if contradicted else "C(t) holds", BLUE),
+                                    f"{100 * fr['idle_fraction_upper_bound']:.0f} %"), "scenario"),
+        "rates": ((2, 1), "Rates", "−dC/dt, η", "model"),
+        "o2": ((1, 1), "O2 demand", "4.57 g/g N", "model"),
+        "energy": ((1, 0), "Energy", f"AE {min(saes):g}-{max(saes):g}", "scenario"),
+        "eff": ((2, 0), "Efficiency", "kWh/kg N", "scenario"),
+        # measured pH input, but the Alk0 scan and the temperature and kLa_CO2 axes are SCENARIOs (P1-1, pass 6)
+        "w2": ((0, 1), "W2 bound", "C(t) fails" if contradicted else "C(t) holds", "scenario"),
     }
+
+
+def check_fig1_bases(t: dict[str, pd.DataFrame], boxes: dict) -> None:
+    """Refuse to draw a box as "measured" when the rows its number is read from carry a SCENARIO or ASSUMPTION label,
+    and refuse an unknown basis."""
+    for key, (_, title, _, basis) in boxes.items():
+        if basis not in FIG1_BASIS_COLORS:
+            raise ValueError(f"Fig. 1 box {key!r}: unknown basis {basis!r}")
+        if key not in FIG1_BOX_SOURCES or basis != "measured":
+            continue
+        name, row = FIG1_BOX_SOURCES[key]
+        tab = t[name]
+        if "assumptions" not in tab.columns:
+            continue
+        rows = tab if row is None else tab[tab[row[0]].astype(str) == row[1]]
+        tagged = rows["assumptions"].fillna("").astype(str)
+        hit = tagged[tagged.str.contains("|".join(_LABEL_TAGS))]
+        if not hit.empty:
+            raise ValueError(f"Fig. 1 box {title!r} drawn as measured, but {name} labels its number: "
+                             f"{hit.iloc[0]!r}")
+
+
+def fig1(t: dict[str, pd.DataFrame], d: Path, saes: list[float]) -> None:
+    """The linkage diagram on a 3 x 3 grid, every label at the rcParams size: a title and one short line per box; the
+    report caption and §1 carry the detail."""
+    from matplotlib.patches import Patch
+
+    boxes = fig1_boxes(t, saes)
+    check_fig1_bases(t, boxes)
+    plt = _plt()
     fig, ax = _new(plt)
     ax.set_xlim(0, 3)
     ax.set_ylim(0, 3)
     ax.set_xticks([])
     ax.set_yticks([])
-    for key, ((i, j), title, line, color) in boxes.items():
+    for key, ((i, j), title, line, basis) in boxes.items():
         ax.add_patch(plt.Rectangle((i + BOX_X, j + BOX_Y), 1 - 2 * BOX_X, 1 - 2 * BOX_Y, facecolor="none",
-                                   edgecolor=color, lw=3,
+                                   edgecolor=FIG1_BASIS_COLORS[basis], lw=3,
                                    ls="--" if key == "w2" else "-"))
         ax.text(i + 0.5, j + 0.68, title, ha="center", va="center", color=INK)
         ax.text(i + 0.5, j + 0.30, line, ha="center", va="center", color=INK2)
@@ -261,7 +300,7 @@ def fig1(t: dict[str, pd.DataFrame], d: Path, saes: list[float]) -> None:
         _arrow(ax, boxes[a][0], boxes[b][0], BLUE if b == "w2" else INK2)
     ax.annotate("", xy=(1.12, 2.12), xytext=(0.88, 1.88), arrowprops={"arrowstyle": "-|>", "color": BLUE, "lw": 3})
     ax.legend(handles=[Patch(facecolor="none", edgecolor=c, lw=3, label=lab)
-                       for c, lab in ((BLUE, "measured"), (VIOLET, "model"), (ORANGE, "scenario"))],
+                       for lab, c in FIG1_BASIS_COLORS.items()],
               loc="lower left", frameon=False, handlelength=0.8, handletextpad=0.4, labelspacing=0.2,
               borderaxespad=0.2)
     _save(fig, d, "fig1_linkage_sensors_state_O2_energy_efficiency", plt)

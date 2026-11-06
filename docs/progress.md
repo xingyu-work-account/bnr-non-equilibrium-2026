@@ -1527,3 +1527,42 @@ All checks passed!
 - **Font warnings:** matplotlib warns that Arial has no weight 600 and draws the nearest weight, 700 (bold). The rcParams are applied exactly as specified.
 
 Open: none. This is an implementer's log, not an approval; the reviewer decides.
+
+## Pass 6, P1-1: Fig. 1 box borders follow the basis of each box's number (2026-11-05)
+
+Scope: P1-1 of `docs/rereview_2026-11-05_pass6.md`. Fig. 1 drew the State box ("idle 5-93 %") and the W2-bound box with the blue border that its legend defines as "measured". The idle bounds rest on the ORP SCENARIO threshold (25 °C) and on the M6-inverted C(t). The W2 curve rests on measured pH, but also on the scanned Alk0 and on the temperature and kLa_CO2 SCENARIOs. P2-1 to P2-10 are not in scope.
+
+### What changed
+
+- **`src/bnr_neq/figures.py`:**
+  - `fig1_boxes(t, saes)` returns the boxes as `{key: (cell, title, line, basis)}`, with the basis named as `measured`, `model` or `scenario` instead of a colour. State and W2 bound are now `scenario`. Every other box keeps its basis (Sensors measured; C(t), Rates and O2 demand model; Energy and Efficiency scenario).
+  - `FIG1_BASIS_COLORS` maps basis to colour (blue, violet, orange, as before) and drives both the box borders and the legend.
+  - `FIG1_BOX_SOURCES` names the table and rows each printed number is read from: `sensor_verdicts.csv`; the whole-record row of `states_fractions.csv`; `nh4_truth_w2_consistency.csv`.
+  - `check_fig1_bases` runs before drawing. It raises `ValueError` if a box is `measured` while the `assumptions` of its source rows contain SCENARIO or ASSUMPTION, or if a basis is unknown. No fallback.
+  - The arrows are unchanged, including the blue arrow from W2 bound to C(t). Arrows are not covered by the "box border = basis" legend.
+  - The caption in `FIGURE_GROUPS` is unchanged. Its definition, "orange SCENARIO-dependent", already covers both boxes.
+- **`tests/test_figures.py`**, 4 new tests (5 cases), on the run-all tables:
+  - the State and W2 rows are labelled, so their boxes are not `measured`, and only Sensors is `measured`. The labels are read independently of `check_fig1_bases`;
+  - the guard raises when State or W2 is set back to `measured` (parametrized), and on an unknown basis;
+  - the drawn figure object: each rectangle's edge colour equals `FIG1_BASIS_COLORS[basis]`, the legend maps measured/model/scenario to the same colours, and no labelled box is blue.
+
+### Changed outputs against `73f4079`
+
+- **Figures:** `figures/fig1_linkage_sensors_state_O2_energy_efficiency.{png,svg}` and the same two files in `figures/no_text/`. The SVGs differ in two lines each: the stroke colour of the State and W2-bound boxes.
+- **Tables and reports:** none changed. They were redrawn with `uv run python -m bnr_neq figures` from the saved tables, and `git status` shows only the four fig1 files under `outputs/`.
+
+### Commands and results (P1-1)
+
+```
+$ uv run ruff check                                   # All checks passed!
+$ uv run python -m bnr_neq figures                    # exit 0, wrote 29 figures; only the 4 fig1 files differ
+$ uv run pytest -q -rs                                # exit 0
+496 passed in 27546.02s (7:39:06)
+```
+
+- **Test count, 496:** the 491 tests of W6/W7, plus the 5 new Fig. 1 cases. **Skips:** none.
+- The SHA-256 of every file in `src/bnr_neq/` and of `tests/test_figures.py` was recorded before the run and was identical after it.
+
+Code SHA-256 at the time of the test run: `src/bnr_neq/figures.py` `d9e91ee34c1e99ab1fe83bda71c93822a70337f7dd3d49c9aaaa6e2bfe3f8fa8`, `tests/test_figures.py` `8c74332d7a3057594457739e17fb2388bb46b2ccb933da4fb6691f4c978139ec`. No file under `src/` or `tests/` changed after the run started, and no test was edited after it.
+
+Open: P2-1 to P2-10 and the two pass-5 P2 items, unchanged. This is an implementer's log, not an approval; the reviewer decides.
