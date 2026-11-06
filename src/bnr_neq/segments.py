@@ -15,7 +15,7 @@ from scipy.special import wrightomega
 from scipy.stats import theilslopes
 from statsmodels.stats.diagnostic import acorr_ljungbox
 
-from . import qc, thermo, volume
+from . import figures, qc, thermo, volume
 from .config import Config
 from .constants import ANTHONISEN_EXP_K, KELVIN_OFFSET, NH3_PER_N
 from .model import RAW_READING, check_single_observation_model
@@ -699,75 +699,6 @@ def reference_comparison(table: pd.DataFrame, refwin: pd.DataFrame, ls: pd.DataF
     return out[["quantity", "reference", "obtained", "tolerance", "abs_diff", "pass", "note"]]
 
 
-# --- Figure -------------------------------------------------------------------
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
-
-def figure(cfg: Config, grid: pd.DataFrame, table: pd.DataFrame, jumps: pd.DataFrame, cp: pd.DataFrame,
-           held: pd.DataFrame | None, ec_pulses: pd.DataFrame | None, png: Path, svg: Path) -> None:
-    from .report import pyplot
-
-    plt = pyplot()
-
-    t = grid["t_mid_d"].to_numpy()
-    fig, axes = plt.subplots(4, 1, figsize=(11, 11), sharex=True, facecolor=SURFACE)
-    panels = [("nh4_mgNH4_L", "NH4+ (mg NH4+/L)", "NH4"), ("pH", "pH", "pH"),
-              ("orp_mV_vs_Ag", "ORP (mV vs bare Ag, relative)", "ORP"), ("EC_mS_cm", "EC (mS/cm, unvalidated)", "EC")]
-    for ax, (col, lab, series) in zip(axes, panels):
-        ax.set_facecolor(SURFACE)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(colors=INK2, labelsize=8)
-        ax.grid(True, color=GRID, linewidth=0.6)
-        ax.set_axisbelow(True)
-        ax.axvspan(0, SEGMENT_START_D, color=GRID, alpha=0.6, lw=0)
-        ax.plot(t, grid[col], color=BLUE, lw=0.8)
-        for tp in cfg.pulse_times_d:
-            ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-        ev = cp[(cp["series"] == series) & cp["event"] & cp["tied_pulse"].isna()]
-        y = np.interp(ev["t_break_d"], t, grid[col])
-        ax.scatter(ev["t_break_d"], y, marker="D", s=22, color=ORANGE, edgecolor=SURFACE, linewidth=1, zorder=3,
-                   label="Change-point event not tied to a pulse")
-        ax.set_ylabel(lab, fontsize=8.5, color=INK)
-    ax = axes[0]
-    if held is not None:
-        for h in held.itertuples(index=False):
-            ax.axvspan(h.t_start_d, h.t_end_d, ymin=0.95, ymax=1.0, color=INK2, alpha=0.5, lw=0)
-    comp = table[table["status"] == "computed"]
-    for r in comp.itertuples(index=False):
-        b = bins_in(grid, r.fit_start_d, r.fit_end_d)
-        mid_t, mid_y = b["t_mid_d"].median(), b["nh4_mgNH4_L"].median()
-        tt = np.array([r.fit_start_d, r.fit_end_d])
-        ax.plot(tt, mid_y + r.slope_mgNH4_L_d * (tt - mid_t), color=AQUA, lw=2.2,
-                label="Theil-Sen slope window" if r.sub_segment == comp["sub_segment"].iloc[0] else None)
-    located = jumps[jumps["jump"].astype(bool)]
-    for cls, color, marker, lab in (("pulse_response", AQUA, "^", "NH4 jump: delayed pulse response"),
-                                    ("electrode_offset", VIOLET, "v", "NH4 jump: electrode offset")):
-        s = located[located["class"] == cls]
-        ax.scatter(s["t_jump_d"], s["post_level"], marker=marker, s=40, color=color, edgecolor=SURFACE,
-                   linewidth=1.2, zorder=4, label=lab)
-    other = step_candidates(jumps)
-    other = other[~other["jump"].astype(bool)]
-    ax.scatter(other["t_event_d"], other["post_level"], marker="x", s=30, color=ORANGE, zorder=4,
-               label="NH4 step candidate (unlocated or non-sustained): window boundary")
-    ax.plot([], [], color=INK2, alpha=0.5, lw=5, label="Held/damped output (bar at top)")
-    ax.legend(fontsize=7.5, frameon=False, loc="lower center", ncol=2)
-    if ec_pulses is not None and len(ec_pulses):
-        axes[3].scatter(ec_pulses["t_peak_d"], np.interp(ec_pulses["t_peak_d"], t, grid["EC_mS_cm"]) + 0.05,
-                        marker="|", s=40, color=VIOLET, label="Late EC pulse (probe event)")
-    axes[3].legend(fontsize=7.5, frameon=False, loc="upper center")
-    axes[3].set_xlabel("Time (d, logger clock). Dotted: NH4Cl pulses. Grey band: start-up (day 0 to 1).",
-                       fontsize=8, color=INK2)
-    axes[0].set_title("Common-window overview (0.01 d grid) with pulses, flags and electrode events",
-                      loc="left", fontsize=10, color=INK)
-    axes[3].set_xlim(0, COMMON_END_D)
-    fig.tight_layout()
-    fig.savefig(png, dpi=150, facecolor=SURFACE)
-    fig.savefig(svg, facecolor=SURFACE, metadata={"Date": None})
-    plt.close(fig)
-
-
 # --- Stage --------------------------------------------------------------------
 @dataclass
 class SegmentResult:
@@ -794,10 +725,6 @@ def compute(cfg: Config, grid: pd.DataFrame, jumps: pd.DataFrame, pulse_table: p
     ls, spectra = periodograms(grid)
     return SegmentResult(table, windows, refwin, fits, params, cp, sens, ls, spectra,
                          reference_comparison(table, refwin, ls))
-
-
-def _optional_table(path: Path) -> pd.DataFrame | None:
-    return pd.read_csv(path) if path.is_file() else None
 
 
 def write_report(cfg: Config, r: SegmentResult, path: Path) -> None:
@@ -964,7 +891,6 @@ def run(cfg: Config, out_dir: Path | str) -> SegmentResult:
     r.ls_summary.to_csv(d["tables"] / "lomb_scargle_summary.csv", index=False)
     r.ls_spectra.to_parquet(d["processed"] / "lomb_scargle_spectra.parquet", index=False)
     r.references.to_csv(d["tables"] / "segments_references.csv", index=False)
-    figure(cfg, grid, r.table, jumps, r.changepoints, held, _optional_table(d["tables"] / "ec_late_pulses.csv"),
-           d["figures"] / "fig2_overview.png", d["figures"] / "fig2_overview.svg")
+    figures.segments_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "segments.md")
     return r

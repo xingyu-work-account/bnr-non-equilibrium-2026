@@ -30,7 +30,7 @@ from statsmodels.tools.sm_exceptions import InterpolationWarning
 from statsmodels.tsa.stattools import adfuller, kpss
 
 from . import estimators as E
-from . import timebase
+from . import figures, timebase
 from .config import Config, MissingInputError
 
 BASE_SEED = 20261018
@@ -913,94 +913,6 @@ def compute(cfg: Config, inputs: dict, validation: pd.DataFrame | None = None) -
 # =============================================================================
 # Figure, report, stage
 # =============================================================================
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
-
-def _style(ax):
-    ax.set_facecolor(SURFACE)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(colors=INK2, labelsize=8)
-    ax.grid(True, color=GRID, linewidth=0.6)
-    ax.set_axisbelow(True)
-
-
-def figure(cfg: Config, r: DynamicsResult, png: Path, svg: Path) -> None:
-    from .report import pyplot
-
-    plt = pyplot()
-
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8.5), facecolor=SURFACE)
-    # (a) Markov validation
-    ax = axes[0, 0]
-    _style(ax)
-    v = r.validation
-    clean = v[v["check"] == "markov_ring_entropy_production"]
-    true = clean["expected"].astype(float).to_numpy()
-    ax.errorbar(true, clean["value"], yerr=[clean["value"] - clean["ci_low"], clean["ci_high"] - clean["value"]],
-                fmt="o", color=BLUE, ms=6, capsize=3, label="Transition estimator (99 % CI)")
-    q = v[v["check"] == "quantized_observable_bias"]
-    q_true = true[1:]
-    ax.scatter(q_true, q_true + q["value"].astype(float), marker="s", color=ORANGE, s=36, zorder=3,
-               label="Noisy observable quantized to 0.01")
-    ax.plot([0, 1], [0, 1], color=INK2, lw=0.8, ls="--")
-    ax.set_xlabel("Analytic (p − q) ln(p/q) per step", fontsize=8.5, color=INK2)
-    ax.set_ylabel("Estimated entropy production per step", fontsize=8.5, color=INK2)
-    ax.set_title("a  Estimator validation: three-state ring chain", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False, loc="upper left")
-    # (b) pH ordinal KL per window
-    ax = axes[0, 1]
-    _style(ax)
-    w = r.windows
-    for series, color in (("pH", BLUE), ("ORP", AQUA), ("NH4", VIOLET)):
-        g = w[(w["series"] == series) & (w.get("ordinal_kl_status", pd.Series(dtype=str)) == "computed")]
-        mid = 0.5 * (g["t_start_d"] + g["t_end_d"])
-        sig = g["ordinal_kl_p"] <= 0.05
-        ax.scatter(mid[sig], g.loc[sig, "ordinal_kl"], color=color, s=30, label=f"{series}: significant vs IAAFT")
-        ax.scatter(mid[~sig], g.loc[~sig, "ordinal_kl"], facecolor="none", edgecolor=color, s=30,
-                   label=f"{series}: not significant")
-    for tp in cfg.pulse_times_d:
-        ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-    ax.set_xlim(0, END_D)
-    ax.set_xlabel("Time (d); stationary 0.25 d windows only", fontsize=8.5, color=INK2)
-    ax.set_ylabel("Ordinal-pattern KL (tie-aware, nats)", fontsize=8.5, color=INK2)
-    ax.set_title("b  Time irreversibility in stationary windows", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7, frameon=False, loc="upper right", ncol=1)
-    # (c) Onsager
-    ax = axes[1, 0]
-    _style(ax)
-    s = r.onsager_summary
-    ax.bar(s["pulse"].astype(str), s["snr_pulse_response"], color=BLUE, width=0.55)
-    ax.axhline(ONSAGER_MIN_SNR, color=ORANGE, lw=1.5, ls="--", label=f"Required SNR ({ONSAGER_MIN_SNR:g})")
-    ax.set_xlabel("Pulse", fontsize=8.5, color=INK2)
-    ax.set_ylabel("|pH pulse response| / fluctuation SD", fontsize=8.5, color=INK2)
-    ax.set_title("c  Onsager regression test: signal-to-noise", loc="left", fontsize=10, color=INK)
-    ax.text(0.02, 0.86, "Below the line: regression test not interpretable", transform=ax.transAxes, fontsize=7.5,
-            color=INK2, va="top")
-    for xi, (val, resp) in enumerate(zip(s["snr_pulse_response"], s["pulse_response"])):
-        ax.text(xi, val + 0.05, f"ΔpH {resp:+.2f}", ha="center", fontsize=7.5, color=INK2)
-    ax.legend(fontsize=7.5, frameon=False, loc="center right")
-    # (d) Flux
-    ax = axes[1, 1]
-    _style(ax)
-    f = r.flux[pd.to_numeric(r.flux["circulation"], errors="coerce").notna()].copy()
-    f["circulation"] = f["circulation"].astype(float)
-    for i, (plane, color) in enumerate((("pH-ORP", AQUA), ("pH-NH4", VIOLET))):
-        g = f[f["plane"] == plane]
-        xpos = g["segment"].to_numpy() + (i - 0.5) * 0.25
-        ax.errorbar(xpos, g["circulation"], yerr=[g["circulation"] - g["ci_low"], g["ci_high"] - g["circulation"]],
-                    fmt="o", color=color, capsize=3, label=plane)
-    ax.axhline(0, color=INK2, lw=0.8)
-    ax.set_xticks(range(5), ["base", "P1", "P2", "P3", "P4"])
-    ax.set_xlabel("Segment", fontsize=8.5, color=INK2)
-    ax.set_ylabel("Circulation rate (standardized units/step, 95 % CI)", fontsize=8.5, color=INK2)
-    ax.set_title("d  Probability flux (Battle et al.)", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False, loc="upper right")
-    fig.tight_layout()
-    fig.savefig(png, dpi=150, facecolor=SURFACE)
-    fig.savefig(svg, facecolor=SURFACE, metadata={"Date": None})
-    plt.close(fig)
 
 
 def onsager_conclusion(osum: pd.DataFrame) -> str:
@@ -1172,6 +1084,6 @@ def run(cfg: Config, out_dir, validation: pd.DataFrame | None = None) -> Dynamic
     r.stability.to_csv(d["tables"] / "dynamics_stability.csv", index=False)
     r.flux.to_csv(d["tables"] / "dynamics_flux.csv", index=False)
     r.electrode.to_csv(d["tables"] / "dynamics_electrode.csv", index=False)
-    figure(cfg, r, d["figures"] / "fig5_dynamics.png", d["figures"] / "fig5_dynamics.svg")
+    figures.dynamics_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "dynamics.md")
     return r

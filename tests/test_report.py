@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from bnr_neq import figures as F
 from bnr_neq import report as R
 
 
@@ -134,8 +135,10 @@ def test_assemble_report_requires_every_table(cfg, tmp_path):
 
 
 def test_every_figure_and_table_indexed():
-    assert len(R.FIGURES) == 8 and all(f.endswith(".png") for f, _ in R.FIGURES)
-    assert {"fig1_linkage.png", "fig4_constraints.png", "fig8_efficiency.png"} <= {f for f, _ in R.FIGURES}  # W6
+    # one axes per file: figures 1-8 split into 29 single-axes figures, grouped for the report
+    assert len(R.FIGURES) == 29 and all(f.endswith(".png") for f, _ in R.FIGURES)
+    assert [k for k, _, _ in F.FIGURE_GROUPS] == ["fig1", "fig2", "fig3", "fig5", "fig6", "fig7", "fig4", "fig8"]
+    assert {p[:4] for p, _ in R.FIGURES} >= {"fig1", "fig4", "fig8"}  # W6
     assert "pulses.csv" in R.TABLE_DESCRIPTIONS and "model_fit.csv" in R.TABLE_DESCRIPTIONS
 
 

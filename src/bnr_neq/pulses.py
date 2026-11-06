@@ -8,6 +8,7 @@ basis, the inputs it was computed from, and a status that is either
 from __future__ import annotations
 
 import itertools
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,8 +16,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from . import alkalinity, energy, model, thermo, volume
+from . import alkalinity, energy, figures, model, thermo, volume
 from . import segments as S
+from . import states as ST
 from .config import Config, MissingInputError
 from .constants import (
     DG0_NITRIFICATION_KJ_MOL_N,
@@ -33,6 +35,24 @@ EXPLORATORY = "EXPLORATORY (n = 4 pulses)"
 IDLE_LOWER = "idle_fraction_LOWER_BOUND"  # idle_fraction_lower_bound
 IDLE_UPPER = "idle_fraction_UPPER_BOUND"  # idle_fraction_upper_bound
 IDLE_CONDITIONAL = "idle_fraction_of_classified_time_CONDITIONAL"  # idle_fraction_of_classified_time
+# Pass 6 (G3, G4, G6): every row of pulses.csv names, in ``assumptions``, the SCENARIO and ASSUMPTION values it rests
+# on. A metric is interpreted at constant volume unless it carries its own evaporation SCENARIO or uses no N amount,
+# dose or inverted C(t): times, pH, counts, stirrer energy and FA from the electrode reading (VOLUME_FREE_METRICS;
+# ``*`` = any suffix). FA and ΔA from C(t) depend on V (C(t) scales by V0/V(t) under evaporation, and ΔC = dose/V0),
+# so they keep the constant-volume label. The W3 state metrics add the 25 °C ORP threshold; MODEL-BASED rows add the
+# fixed constants of the selected model.
+VOLUME_FREE_METRICS = ("t_pulse_d", "segment_end_d", "median_pH", "o2_windows_computed", "stirrer_energy_J",
+                       "fa_median_SENSITIVITY_reading_as_TAN_*")
+_VOLUME_FREE_RE = "^(" + "|".join(re.escape(m).replace(r"\*", ".*") for m in VOLUME_FREE_METRICS) + ")$"
+_EVAPORATION_RE = r"_SCENARIO_evaporation_([0-9.]+)_mL_per_d"
+STATE_METRICS = (IDLE_LOWER, IDLE_UPPER, IDLE_CONDITIONAL, "classified_fraction")
+W2_CONSISTENCY_ASSUMPTIONS = (f"{model.CONSTANT_VOLUME_ASSUMPTION} (the primary frame); SCENARIO: Alk0 scanned over "
+                              "1-15 meq/L (initial_alkalinity_meq_L not measured)")
+W2_CONSISTENCY_INDEPENDENT = ("checkpoint", "t_d", "alk0_scan_max_meq_L", "assumptions")
+W2_CONSISTENCY_DERIVED = ("C_inv_mgN_L", "removed_per_initial_litre_mgN_L", "removed_band_low_mgN_L",
+                          "removed_band_high_mgN_L", "alk0_required_if_nitrified_meq_L",
+                          "alk0_required_if_nitrified_band_min_meq_L", "alk0_required_any_proton_sink_meq_L",
+                          "consistent_at_best_fit")
 
 INPUTS = {
     "segments": "outputs/tables/segments.csv",
@@ -220,7 +240,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
         g_rel = float(energy.gibbs_released_J(n_removed)) if removed_ok else np.nan
         for sae in saes:
             sl = f"AE{sae:g}"
-            sae_basis = (f"SCENARIO field (process-water) aeration efficiency AE {sae:g} kg O2/kWh at about 2 mg/L DO, "
+            sae_basis = (f"SCENARIO field (process-water) aeration efficiency AE {sae:g} kg O2/kWh at the plant's operating DO, "
                          f"not the clean-water SAE ({sae_src})")
             if removed_ok and n_removed > 0:
                 e = float(energy.aeration_energy_kWh(o2, sae))
@@ -271,7 +291,7 @@ def pulse_metrics(cfg: Config, inputs: dict) -> pd.DataFrame:
                     add(k, metric_e, float(energy.specific_energy_kWh_per_kgN(e_sup, n_removed)), "kWh/kg N",
                         f"supply capacity / AE / N removed: includes aeration while idle; {kla_basis}; SCENARIO field AE "
                         f"{sae:g} kg O2/kWh ({sae_src}). Inconsistent by construction: the capacity is at DO = 0 while "
-                        "the AE is defined at DO = 2 mg/L, so this is an upper bound", "o2_supply_capacity; n_removed_mgN",
+                        "the AE is a field value at the plant's operating DO (> 0), so this is an upper bound", "o2_supply_capacity; n_removed_mgN",
                         obs=OBS, series=tid)
                     add(k, metric_g, g_rel / float(energy.kwh_to_J(e_sup)), "-",
                         f"free energy released / supply-based aeration energy; {kla_basis}; SCENARIO field AE {sae:g}",
@@ -881,6 +901,26 @@ class PulseResult:
     volume_constraints: pd.DataFrame | None = None
 
 
+def row_assumptions(metric: str, text: str, selected: model.ModelSpec) -> str:
+    """The SCENARIO and ASSUMPTION values of one pulses.csv row (``text`` = its basis and series)."""
+    out = []
+    evap = re.search(_EVAPORATION_RE, metric)
+    if evap:
+        out.append(f"SCENARIO: evaporation {evap.group(1)} mL/d (V(t) = V0 − E t)")
+    elif not re.match(_VOLUME_FREE_RE, metric):
+        out.append(model.CONSTANT_VOLUME_ASSUMPTION)
+    if metric in STATE_METRICS:
+        out.append(f"W3 ORP threshold ±{ST.ORP_LEVEL_MV} mV, {ST.ORP_THRESHOLD_SCENARIO}")
+    if re.search(model.MODEL_BASED_TOKEN, text) or model.MODEL_STATE_PREFIX in text:
+        out.extend(f"{a} (selected model {selected.name})" for a in model.kinetic_assumptions(selected))
+    return "; ".join(out) or "none beyond the metric name"
+
+
+def label_assumptions(m: pd.DataFrame, selected: model.ModelSpec) -> pd.DataFrame:
+    text = model._as_text(m["basis"]) + " " + model._as_text(m["nh4_series"])
+    return m.assign(assumptions=[row_assumptions(k, t, selected) for k, t in zip(m["metric"], text)])
+
+
 def compute(cfg: Config, inputs: dict) -> PulseResult:
     tw = truth_windows(cfg, inputs)
     m = pulse_metrics(cfg, {**inputs, "truth_windows": tw})
@@ -888,6 +928,14 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     cons = w2_consistency(bal)
     n = len(cfg.pulse_times_d)
     m = qualify(m, cons, n, "pulse", "nh4_observation_model")
+    selected = inputs["model_fit"].loc[inputs["model_fit"]["selected"], "model"].iloc[0]
+    m = label_assumptions(m, {s.name: s for s in model.model_specs(cfg)}[selected])
+    base = bal[bal["volume_scenario"] == volume.CONSTANT]
+    cons = cons.assign(nh4_observation_model=str(base["nh4_observation_model"].iloc[0]),
+                       nh4_truth_id=str(base["nh4_truth_id"].iloc[0]), assumptions=W2_CONSISTENCY_ASSUMPTIONS)
+    model.check_single_observation_model(cons, label_cols=("verdict",), series_col="nh4_truth_id",
+                                         independent_cols=W2_CONSISTENCY_INDEPENDENT,
+                                         derived_cols=W2_CONSISTENCY_DERIVED)
     tw = qualify(tw, cons, n, "governing_pulse", "nh4_observation_model")
     check_w2_qualified(m, cons, n)
     check_w2_qualified(tw, cons, n, "governing_pulse")
@@ -896,86 +944,6 @@ def compute(cfg: Config, inputs: dict) -> PulseResult:
     model.check_single_observation_model(tw, label_cols=("status", "w2_bound_check"), series_col="nh4_truth_id",
                                          independent_cols=indep, derived_cols=derived)
     return PulseResult(m, associations(m), tw, bal, cons, volume_constraints(cfg, inputs))
-
-
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
-
-def figure(cfg: Config, r: PulseResult, png: Path, svg: Path) -> None:
-    from .report import pyplot
-
-    plt = pyplot()
-
-    w = wide(r.metrics)
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), facecolor=SURFACE)
-    for ax in axes.flat:
-        ax.set_facecolor(SURFACE)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(colors=INK2, labelsize=8)
-        ax.grid(True, color=GRID, linewidth=0.6, axis="y")
-        ax.set_axisbelow(True)
-    x = np.arange(len(w))
-    labels = [f"P{int(p)}" for p in w["pulse"]]
-    ax = axes[0, 0]
-    lo, hi = wide(r.metrics, "ci95_low"), wide(r.metrics, "ci95_high")
-    for off, col, color, lab in ((-0.2, "consumption_uncorrected_weighted_mgN_L_d", BLUE, "Electrode reading (measured)"),
-                                 (0.2, RESPONSE, ORANGE, "M6-inverted NH4 (single observation model)")):
-        v = w[col].to_numpy(dtype=float)
-        err = np.vstack([v - lo[col].to_numpy(dtype=float), hi[col].to_numpy(dtype=float) - v])
-        ax.bar(x + off, v, 0.38, color=color, label=lab, yerr=err, error_kw={"ecolor": INK2, "capsize": 3, "lw": 0.8})
-    ax.scatter(x + 0.2, w["consumption_SENSITIVITY_linear_gain_weighted_mgN_L_d"], marker="_", s=160, color=INK, zorder=3,
-               label="SENSITIVITY: linear gain correction")
-    ax.axhline(0, color=INK2, lw=0.8)
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("Consumption (mg N/L/d)", fontsize=8.5, color=INK)
-    ax.set_title("a  Consumption after each pulse (positive slope windows, 95 % CI)", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False)
-    ax = axes[0, 1]
-    ax.bar(x, w["delta_A_kJ_mol_SCENARIO_T25C"], 0.55, color=AQUA)
-    for xi, v in zip(x, w["delta_A_kJ_mol_SCENARIO_T25C"]):
-        ax.text(xi, v + 0.05, f"{100 * v / abs(DG0_NITRIFICATION_KJ_MOL_N):.1f} % of |ΔG°′|", ha="center", fontsize=7.5,
-                color=INK2)
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("ΔA at the pulse (kJ/mol, SCENARIO 25 °C)", fontsize=8.5, color=INK)
-    ax.set_title("b  Affinity step on the M6-inverted NH4", loc="left", fontsize=10, color=INK)
-    ax = axes[1, 0]
-    ax.grid(True, color=GRID, linewidth=0.6, axis="x")
-    fa_cols = [c for c in w.columns if c.startswith("fa_median_mgNH3_L_SCENARIO_")]
-    for col, color in zip(fa_cols, (BLUE, VIOLET, AQUA, ORANGE)):
-        lab = col.removeprefix("fa_median_mgNH3_L_SCENARIO_T").removesuffix("C") + " °C SCENARIO"
-        ax.scatter(w[col], w[RESPONSE], color=color, s=40, label=lab)
-        for xi, yi, lb in zip(w[col], w[RESPONSE], labels):
-            ax.annotate(lb, (xi, yi), textcoords="offset points", xytext=(5, 4), fontsize=7.5, color=INK2)
-    ax.axhline(0, color=INK2, lw=0.8)
-    ax.set_xlabel("Median free ammonia from the M6-inverted TAN (mg NH3/L)", fontsize=8.5, color=INK2)
-    ax.set_ylabel("M6-inverted consumption (mg N/L/d)", fontsize=8.5, color=INK)
-    ax.set_title(f"c  Free ammonia vs consumption, {EXPLORATORY}", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False)
-    ax = axes[1, 1]
-    eta = w["eta_conversion_fraction"].to_numpy(dtype=float) if "eta_conversion_fraction" in w else np.full(len(w), np.nan)
-    ax.bar(x - 0.2, np.nan_to_num(eta), 0.38, color=ORANGE, label="Dose-anchored, M6-inverted C(t)")
-    for xi, e in zip(x, eta):
-        if np.isnan(e):
-            ax.text(xi - 0.2, 0.01, "not\ncomputed", ha="center", va="bottom", fontsize=6.5, color=INK2)
-    ax.bar(x + 0.2, w["eta_conversion_fraction_MODEL_BASED"], 0.38, color=VIOLET, label="MODEL-BASED (M6 rate law)")
-    top = np.nanmax(np.r_[eta, w["eta_conversion_fraction_MODEL_BASED"].to_numpy(dtype=float)])
-    ax.set_ylim(0.0, 1.45 * top)
-    ax.legend(fontsize=7.5, frameon=False, loc="upper left")
-    ax.set_xticks(x, labels)
-    ax.set_ylabel(f"η (fraction of the {thermo.pulse_dose_from_config(cfg).n_mg_L:.2f} mg N/L pulse)", fontsize=8.5,
-                  color=INK)
-    ax.set_title("d  Conversion before the next pulse", loc="left", fontsize=10, color=INK)
-    ratio = r.metrics[r.metrics["metric"] == "free_energy_to_stirrer_energy_ratio"]["status"]
-    ratio_txt = "computed" if (ratio == "computed").all() else str(ratio.iloc[0]).removeprefix("not computed: ")
-    ax.text(0.98, 0.97, f"P{len(w)}: until the end of the record ({END_D:g} d).\nEnergy ratios: "
-            + ("computed" if ratio_txt == "computed" else f"not computed ({ratio_txt})"),
-            transform=ax.transAxes, va="top", ha="right", fontsize=7.5, color=INK2)
-    fig.tight_layout()
-    fig.savefig(png, dpi=150, facecolor=SURFACE)
-    fig.savefig(svg, facecolor=SURFACE, metadata={"Date": None})
-    plt.close(fig)
 
 
 def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
@@ -1060,7 +1028,7 @@ def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
          "UPPER_BOUND: inactive, unclassified and artifact bins over all bins) with its coverage (`classified_fraction`) "
          "and, only where the coverage is at least one half, the CONDITIONAL value over classified time, and the "
          "dose-removal time (dose / post-pulse rate, not a fitted relaxation constant) against the pulse interval. "
-         "The supply-based energy divides a transfer capacity at DO = 0 by a field AE defined at DO = 2 mg/L. The "
+         "The supply-based energy divides a transfer capacity at DO = 0 by a field AE at the plant's operating DO (> 0). The "
          "stirrer terms are LABORATORY-SPECIFIC."),
         "",
         ("R8 CASE: a slope window between two electrode steps shorter than 3 x the longest delayed electrode response is "
@@ -1075,7 +1043,10 @@ def write_report(cfg: Config, r: PulseResult, path: Path) -> None:
          "bounding the pulse needs more initial alkalinity than the 1-15 meq/L scan (at the best fit), else the "
          "consistent requirement. The stage refuses to write a C(t)-derived row of a contradicted pulse without it."),
         "",
-        md_table(r.consistency, digits=3) if r.consistency is not None else "not computed",
+        f"Assumptions of every row: {W2_CONSISTENCY_ASSUMPTIONS}.",
+        "",
+        md_table(r.consistency.drop(columns=["assumptions"], errors="ignore"), digits=3)
+        if r.consistency is not None else "not computed",
         "",
         "## Water-loss constraints (W8)",
         "",
@@ -1106,6 +1077,6 @@ def run(cfg: Config, out_dir) -> PulseResult:
     r.truth_balance.to_csv(d["tables"] / "nh4_truth_balance.csv", index=False)
     r.consistency.to_csv(d["tables"] / "nh4_truth_w2_consistency.csv", index=False)
     r.volume_constraints.to_csv(d["tables"] / "volume_constraints.csv", index=False)
-    figure(cfg, r, d["figures"] / "fig7_pulses.png", d["figures"] / "fig7_pulses.svg")
+    figures.pulses_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "pulses.md")
     return r

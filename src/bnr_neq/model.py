@@ -22,7 +22,7 @@ import pandas as pd
 from scipy.optimize import brentq, least_squares
 from scipy.signal import lfilter
 
-from . import thermo
+from . import figures, thermo
 from .config import Config
 from .constants import (
     ANTHONISEN_EXP_K,
@@ -634,7 +634,7 @@ def at_bounds(lay: Layout, x: np.ndarray, free: np.ndarray) -> str:
 
 
 def bounds_text(fit_df: pd.DataFrame) -> str:
-    """Z2: every candidate whose calibration is bound-constrained (`cal_at_bounds`), for §4 and ``model.md``."""
+    """Z2: every candidate whose calibration is bound-constrained (`cal_at_bounds`), for §5 and ``model.md``."""
     flags = fit_df["cal_at_bounds"].fillna("").astype(str)
     rule = (f"`cal_at_bounds`: a free parameter within {BOUND_TOL_FRACTION:g} x its bound width of a bound, in the "
             "fitted coordinates")
@@ -1151,9 +1151,6 @@ def nh4_truth(spec, data, lay, best: Fit, ident: pd.DataFrame, points: list) -> 
 
 
 # --- Stage ---------------------------------------------------------------------------------------
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
 
 @dataclass
 class ModelResult:
@@ -1323,7 +1320,7 @@ def phi_scaling(c: np.ndarray, c_cv: np.ndarray, t: np.ndarray, vol, start: np.n
 
 def volume_scaling_text(vs: pd.DataFrame) -> str:
     """Z1: whether every scenario C(t) is the constant-volume C(t) scaled by φ = V0/V(t) (start and end windows of
-    `model_volume_scenario_summary.csv`, ``PHI_SCALING_TOL``); one text for §1 point 9, §4 and ``model.md``."""
+    `model_volume_scenario_summary.csv`, ``PHI_SCALING_TOL``); one text for §1 point 9, §5 and ``model.md``."""
     if vs.empty:
         return ""
     pairs = [(r["net_loss_mL_per_d"], w, float(r[f"C_{w}_ratio_to_constant_volume"]), float(r[f"phi_{w}_median"]))
@@ -1347,70 +1344,6 @@ def volume_scaling_text(vs: pd.DataFrame) -> str:
                "conditional on constant volume, not more N" if above else "")
             + (f". At the start φ − 1 ≤ {start_max:.3f}, below the tolerance, so the start window cannot tell scaled "
                "from unchanged." if start_max < PHI_SCALING_TOL else "."))
-
-
-def figure(cfg: Config, r: ModelResult, png: Path, svg: Path) -> None:
-    from .report import pyplot
-
-    plt = pyplot()
-
-    def style(ax):
-        ax.set_facecolor(SURFACE)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(colors=INK2, labelsize=8)
-        ax.grid(True, color=GRID, linewidth=0.6)
-        ax.set_axisbelow(True)
-
-    s = r.state
-    fig = plt.figure(figsize=(11, 9), facecolor=SURFACE)
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.2, 1.0], hspace=0.35, wspace=0.28)
-    ax = fig.add_subplot(gs[0, :])
-    style(ax)
-    sw = r.windows or split_windows(cfg)
-    for (a, b), lab in ((sw.cal, "calibration"), (sw.sel, "selection"), (sw.test, "test")):
-        ax.axvspan(a, b, color=GRID if lab != "calibration" else SURFACE, alpha=0.6 if lab == "selection" else 0.9, lw=0)
-        ax.text(0.5 * (a + b), 0.97, lab, transform=ax.get_xaxis_transform(), ha="center", va="top", fontsize=8,
-                color=INK2)
-    ax.plot(s["t_d"], s["electrode_obs_mgN_L"], color=BLUE, lw=0.8, label="Electrode (observed)")
-    ax.plot(s["t_d"], s["model_electrode_calibration_fit_mgN_L"], color=ORANGE, lw=1.4,
-            label=f"Calibrated on days {sw.cal[0]:g}-{sw.cal[1]:g}, frozen afterwards (test offsets not refitted here)")
-    ax.plot(s["t_d"], s["model_electrode_wholefit_mgN_L"], color=AQUA, lw=1.2, ls="--", label="Whole-record refit")
-    for tp in cfg.pulse_times_d:
-        ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-    ax.set_ylabel("NH4+ electrode (mg N/L)", fontsize=8.5, color=INK)
-    ax.set_xlabel("Time (d)", fontsize=8.5, color=INK2)
-    ax.set_title(f"a  Selected model ({r.selected}) with the electrode observation model", loc="left", fontsize=10,
-                 color=INK)
-    ax.legend(fontsize=7.5, frameon=False, loc="lower right")
-
-    ax = fig.add_subplot(gs[1, 0])
-    style(ax)
-    ax.plot(s["t_d"], s["model_rate_mgN_L_d"], color=VIOLET, lw=1.5)
-    for tp in cfg.pulse_times_d:
-        ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-    ax.set_ylabel("Model consumption rate (mg N/L/d)", fontsize=8.5, color=INK)
-    ax.set_xlabel("Time (d)", fontsize=8.5, color=INK2)
-    ax.set_title("b  Consumption rate of the whole-record refit", loc="left", fontsize=10, color=INK)
-
-    ax = fig.add_subplot(gs[1, 1])
-    style(ax)
-    idf = r.identifiability
-    y = np.arange(len(idf))
-    lo = idf["profile_max_delta_low"].clip(upper=40)
-    hi = idf["profile_max_delta_high"].clip(upper=40)
-    ax.scatter(lo, y - 0.15, marker="<", color=BLUE, s=28, label="Low side")
-    ax.scatter(hi, y + 0.15, marker=">", color=ORANGE, s=28, label="High side")
-    ax.axvline(CHI2_95_1DOF, color=INK2, lw=1, ls="--")
-    ax.set_yticks(y, [n + ("" if ok else "  (not identifiable)") for n, ok in zip(idf["parameter"], idf["identifiable"])],
-                  fontsize=7)
-    ax.invert_yaxis()
-    ax.set_xlabel("Max profile Δ reached (n_eff-scaled; capped at 40)", fontsize=8.5, color=INK2)
-    ax.set_title("c  Profile likelihood: identifiability (3.84 line)", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=7.5, frameon=False, loc="lower right")
-    fig.savefig(png, dpi=150, facecolor=SURFACE, bbox_inches="tight")
-    fig.savefig(svg, facecolor=SURFACE, bbox_inches="tight", metadata={"Date": None})
-    plt.close(fig)
 
 
 def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
@@ -1440,6 +1373,13 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
         "default); and a no-consumption reference. Observation: log R = a + (b0 + b1 (t − 1)) "
         f"log C + offsets at every electrode-offset jump detected in M2 ({len(r.offsets)}; the M2 detections are used), "
         "then a first-order lag τ (exact exponential filter). Residuals in log R on the 0.01 d grid."),
+        "",
+        ("Fixed constants and scope (pass 6, G6 and G7). K_NH and K_ALK are ASSUMPTIONS, not estimates, and the "
+         "inverted C(t) inherits K_NH through the joint fit of the selected model. The W5 state A = Alk0 − 2 n/M_N is a "
+         "closed alkalinity balance without CO2 exchange or an inorganic-carbon term, so these candidates test an "
+         "alkalinity limitation, not an inorganic-carbon limitation. Every M6 table names its NH4 observation model "
+         "and model-state series (`nh4_observation_model`, `nh4_series`; per column in "
+         "`model_response_fractions.csv`) and, in `assumptions`, every fixed constant and SCENARIO it rests on."),
         "",
         (f"What the (α, Ks, S_opt) form did and did not do (pass 5, Z3; {HALDANE_CONDITIONING_NOTE}): it removed the "
          "near-perfect correlations of (vmax, Ks, Ki) (largest kinetic |corr| 0.99998 → 0.89 at the alkalinity x FA "
@@ -1519,6 +1459,103 @@ def write_report(cfg: Config, r: ModelResult, path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# --- Pass 6 (G6, G7, G8): provenance and fixed assumptions of the M6 tables ---------------------------------------
+# Every M6 table names its observation model and NH4 series per row (or per column where one row holds two bases), and
+# the constants each candidate fixes instead of fitting. Added when the tables are written: no fitted value changes.
+CONSTANT_VOLUME_ASSUMPTION = "ASSUMPTION: constant volume V0 (evaporation not measured)"
+K_NH_ASSUMPTION = f"ASSUMPTION: K_NH = {K_NH_ASM_MG_N_L:g} mg N/L fixed (ASM1 default, not fitted)"
+ALK_ASSUMPTION = (f"ASSUMPTION: K_ALK = {K_ALK_ASM3_MEQ_L:g} meq/L fixed (ASM3 default, not fitted); ASSUMPTION: closed "
+                  "alkalinity balance A = Alk0 − 2 n/M_N (nothing added, no CO2 exchange), i.e. an alkalinity "
+                  "limitation, not an inorganic-carbon limitation")
+M6_PROVENANCE_TABLES = ("model_fit.csv", "model_calibration_starts.csv", "model_identifiability.csv", "model_checks.csv",
+                        "model_response_fractions.csv", "nh4_truth_vectors.csv", "model_volume_scenarios.csv",
+                        "model_volume_scenario_summary.csv")
+
+
+def model_state_series(name: str, volume_scenario: str | None = None) -> str:
+    """Series identifier of a candidate's simulated state (under a SCENARIO volume when given)."""
+    return MODEL_STATE_PREFIX + name + (f" ({volume_scenario})" if volume_scenario else "")
+
+
+def kinetic_assumptions(spec: ModelSpec) -> list[str]:
+    """The fixed constants and SCENARIO values of a candidate's rate law (G6, G7)."""
+    out = []
+    if spec.kinetic and not spec.fa:
+        out.append(K_NH_ASSUMPTION)
+    if spec.fa:
+        out.append(f"SCENARIO {spec.T_C:g} °C in free ammonia (Anthonisen), measured pH")
+    if spec.alk:
+        out.append(ALK_ASSUMPTION)
+    return out
+
+
+def candidate_assumptions(spec: ModelSpec, volume_scenario: str | None = None) -> str:
+    """The SCENARIO and ASSUMPTION values a candidate rests on, constant volume unless a scenario is given."""
+    return "; ".join([*kinetic_assumptions(spec), volume_scenario if volume_scenario else CONSTANT_VOLUME_ASSUMPTION])
+
+
+def with_candidate_provenance(df: pd.DataFrame, specs: dict[str, ModelSpec], model_col: str = "model",
+                              volume_col: str | None = None, name: str | None = None) -> pd.DataFrame:
+    """Adds ``nh4_observation_model``, ``nh4_series`` and ``assumptions`` per row: each row rests on the state of its
+    own candidate (``model_col``) or, with ``name``, of that one model."""
+    names = df[model_col] if name is None else pd.Series(name, index=df.index)
+    vols = list(df[volume_col]) if volume_col else [None] * len(df)
+    return df.assign(nh4_observation_model=OBSERVATION_MODEL,
+                     nh4_series=[model_state_series(n, v) for n, v in zip(names, vols)],
+                     assumptions=[candidate_assumptions(specs[n], v) for n, v in zip(names, vols)])
+
+
+def m6_tables(cfg: Config, r: ModelResult) -> dict[str, pd.DataFrame]:
+    """The M6 tables as written, with provenance (G8) and assumptions (G6, G7)."""
+    specs = {s.name: s for s in model_specs(cfg)}
+    sel = r.selected
+    resp = r.responses.assign(model_response_fraction_nh4_observation_model=OBSERVATION_MODEL,
+                              model_response_fraction_nh4_series=model_state_series(sel),
+                              observed_response_fraction_nh4_observation_model=RAW_READING,
+                              assumptions=candidate_assumptions(specs[sel]))
+    tid = r.truth.summary.set_index("key")["value"].get("nh4_truth_id", "") if r.truth is not None else ""
+    summ = r.volume_summary.assign(
+        nh4_observation_model=OBSERVATION_MODEL,
+        nh4_series=[f"C_inv of the {p} refit under {v} (SCENARIO; not saved)" for p, v in
+                    zip(r.volume_summary["primary_selected"], r.volume_summary["volume_scenario"])],
+        constant_volume_nh4_series=tid,
+        assumptions=[candidate_assumptions(specs[p], v) for p, v in
+                     zip(r.volume_summary["primary_selected"], r.volume_summary["volume_scenario"])])
+    return {
+        "model_fit.csv": with_candidate_provenance(r.comparison, specs),
+        "model_calibration_starts.csv": with_candidate_provenance(r.starts, specs),
+        "model_identifiability.csv": with_candidate_provenance(r.identifiability, specs, name=sel),
+        "model_checks.csv": with_candidate_provenance(r.checks, specs, name=sel),
+        "model_response_fractions.csv": resp,
+        "nh4_truth_vectors.csv": with_candidate_provenance(r.truth.vectors, specs, name=sel),
+        "model_volume_scenarios.csv": with_candidate_provenance(r.volume_candidates, specs, volume_col="volume_scenario"),
+        "model_volume_scenario_summary.csv": summ,
+    }
+
+
+def check_m6_provenance(name: str, df: pd.DataFrame) -> None:
+    """Raise :class:`ObservationModelError` unless every row of an M6 table names the M6 observation model, a model
+    state series and its assumptions (the response table per column)."""
+    series_col = "model_response_fraction_nh4_series" if name == "model_response_fractions.csv" else "nh4_series"
+    if series_col not in df.columns:
+        raise ObservationModelError(f"{name}: no {series_col} column")
+    if name == "model_response_fractions.csv":
+        cols = {"model_response_fraction_nh4_observation_model": OBSERVATION_MODEL,
+                "observed_response_fraction_nh4_observation_model": RAW_READING}
+        for c, v in cols.items():
+            if c not in df.columns or (_as_text(df[c]) != v).any():
+                raise ObservationModelError(f"{name}: {c} must be {v} on every row")
+        series = _as_text(df[series_col])
+    else:
+        if "nh4_observation_model" not in df.columns or (_as_text(df["nh4_observation_model"]) != OBSERVATION_MODEL).any():
+            raise ObservationModelError(f"{name}: every row must declare nh4_observation_model = {OBSERVATION_MODEL}")
+        series = _as_text(df[series_col])
+    if name != "model_volume_scenario_summary.csv" and not series.str.startswith(MODEL_STATE_PREFIX).all():
+        raise ObservationModelError(f"{name}: rows without a model-state series")
+    if "assumptions" not in df.columns or (_as_text(df["assumptions"]) == "").any():
+        raise ObservationModelError(f"{name}: rows without their assumptions")
+
+
 def run(cfg: Config, out_dir) -> ModelResult:
     from .pipeline import out_dirs
 
@@ -1526,17 +1563,12 @@ def run(cfg: Config, out_dir) -> ModelResult:
     inputs = load_inputs(out_dir)
     d = out_dirs(out_dir)
     r = compute(cfg, inputs)
-    r.comparison.to_csv(d["tables"] / "model_fit.csv", index=False)
-    r.starts.to_csv(d["tables"] / "model_calibration_starts.csv", index=False)
-    r.identifiability.to_csv(d["tables"] / "model_identifiability.csv", index=False)
-    r.checks.to_csv(d["tables"] / "model_checks.csv", index=False)
-    r.responses.to_csv(d["tables"] / "model_response_fractions.csv", index=False)
+    for name, df in m6_tables(cfg, r).items():
+        check_m6_provenance(name, df)
+        df.to_csv(d["tables"] / name, index=False)
     r.state.to_parquet(d["processed"] / "model_state.parquet", index=False)
     r.truth.series.to_parquet(d["processed"] / "nh4_truth.parquet", index=False)
-    r.truth.vectors.to_csv(d["tables"] / "nh4_truth_vectors.csv", index=False)
     r.truth.summary.to_csv(d["tables"] / "nh4_truth_summary.csv", index=False)
-    r.volume_candidates.to_csv(d["tables"] / "model_volume_scenarios.csv", index=False)
-    r.volume_summary.to_csv(d["tables"] / "model_volume_scenario_summary.csv", index=False)
-    figure(cfg, r, d["figures"] / "fig6_model.png", d["figures"] / "fig6_model.svg")
+    figures.model_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "model.md")
     return r

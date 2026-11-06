@@ -34,13 +34,15 @@ kLa_CO2_per_d = [1.0, 10.0, 100.0]
 kLa_O2_per_d = [1.0, 10.0, 100.0]
 # W4: field (process-water) aeration efficiency AE, kg O2 transferred per kWh of blower or aerator energy, a SCENARIO
 # range that converts the oxygen demand into an aeration-equivalent energy of a full-scale BNR plant. Not a property of
-# this vessel. The key keeps the prompt's name "SAE", but the values are process-water AE at about 2 mg/L DO, not the
-# clean-water standard SAE (fine-pore diffusers: 3.6-4.8 kg O2/kWh clean water, 0.7-2.6 in process water); the metric
-# names in pulses.csv therefore carry the suffix AE. The source warns that its table "should not be used as a general
-# guide line and not for design" (Stenstrom and Rosso 2010, p. 55): a SCENARIO range only. The supply-based energy
-# divides a transfer capacity at DO = 0 by these AE values defined at DO = 2 mg/L (stated in pulses.csv and the report).
-sae_field_kgO2_per_kWh = [0.3, 1.0, 2.6]
-sae_source = "Stenstrom M.K. and Rosso D. (2010) Aeration, lecture notes, UCLA and UC Irvine, 8 Feb 2010, slide 'Efficiency' (p. 56): process-water AE at 2 mg/L DO from 0.3-0.7 kg O2/kWh (coarse bubble, low SRT) to 2.0-2.6 (fine pore, high SRT); range 0.3 to 2.6 = the extremes of that table. Cross-check: Moore L.W. (2021) Biological Wastewater Treatment Training Series no. 11, Aeration Systems, Oak Ridge National Laboratory (references Metcalf & Eddy, 4th ed.): field 1.0-2.3 lb O2/(hp h) = 0.61-1.40 kg O2/kWh at alpha 0.84, DO 2 mg/L"
+# this vessel. The key keeps the prompt's name "SAE", but the values are field-condition AE, not the clean-water
+# standard SAE (fine-pore diffusers: 5.0-6.5 kg O2/kWh standard, 2.5-3.5 field); the metric names in pulses.csv
+# therefore carry the suffix AE. Pass 6, G5 (docs/progress.md): the diffused-air rows of Crawford and Sandino (2010)
+# Table 2-8, whose values include blower power (fine-pore, coarse bubble, submerged turbine with sparger): low = their
+# lowest field value 0.7, high = their highest 3.5, central = the geometric mean sqrt(0.7 x 3.5) = 1.565, rounded to
+# 1.6 (AE enters as 1/AE). Table 2-8 does not state the field DO; the supply-based energy divides a transfer capacity
+# at DO = 0 by an AE at the plant's operating DO (> 0), so it is an upper bound (stated in pulses.csv and the report).
+sae_field_kgO2_per_kWh = [0.7, 1.6, 3.5]
+sae_source = "Crawford G. and Sandino J. (2010) Energy Efficiency in Wastewater Treatment in North America: A Compendium of Best Practices and Case Studies of Novel Approaches, WERF report OWSO4R07e (CH2M HILL Canada), Table 2-8 'Aeration Efficiency', p. 2-20 (based on WEF MOP FD-13 Table 5.1; WEF 2009, MOP 32): field AE of the diffused-air rows that include blower power, fine-pore 2.5-3.5, coarse bubble 1.0-2.0, submerged turbine with sparger 0.7-1.1 kg O2/kWh; field DO not stated. Cross-checks: Stenstrom M.K. and Rosso D. (2010) Aeration, lecture notes, UCLA and UC Irvine, slide 'Efficiency' (p. 56): process-water AE at 2 mg/L DO 0.3-2.6 kg O2/kWh (not for design); Moore L.W. (2021) Aeration Systems, ORNL training series no. 11 (after Metcalf & Eddy, 4th ed.): field 0.61-1.40 kg O2/kWh at alpha 0.84, DO 2 mg/L"
 
 [scenarios.coexistence]
 # Documented SCENARIO for the coexistence affinity (implementation_prompt.md, M4 item 2), not measurements.

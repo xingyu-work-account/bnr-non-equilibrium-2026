@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import qc, thermo
+from . import figures, qc, thermo
 from .config import Config, MissingInputError
 from .constants import KELVIN_OFFSET
 from .pipeline import OUTPUT_DIR, out_dirs
-from .report import md_table, pyplot
+from .report import md_table
 
 # Windows relative to each pulse, in days: (pre_from, pre_to), (post_from, post_to); [from, to)
 NH4_EC_WINDOWS = ((-0.1, 0.0), (0.4, 0.6))
@@ -261,103 +261,6 @@ def verdict_table(v: dict[str, str], pt: pd.DataFrame) -> pd.DataFrame:
     ], columns=["key", "sensor", "verdict", "criterion"])
 
 
-# --- Figure -------------------------------------------------------------------
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
-
-
-def _style(ax):
-    ax.set_facecolor(SURFACE)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    for s in ("left", "bottom"):
-        ax.spines[s].set_color(INK2)
-    ax.tick_params(colors=INK2, labelsize=8)
-    ax.grid(True, color=GRID, linewidth=0.6)
-    ax.set_axisbelow(True)
-
-
-def figure(cfg, natives, pt, bal, jumps, held, path_png: Path, path_svg: Path) -> None:
-    pulses = cfg.pulse_times_d
-    bal_v = dict(zip(bal["quantity"], bal["value"]))
-    plt = pyplot()
-    fig = plt.figure(figsize=(11, 10), facecolor=SURFACE)
-    gs = fig.add_gridspec(3, 4, height_ratios=[1.2, 1.2, 1.0], hspace=0.5, wspace=0.35)
-
-    # (a) EC staircase
-    ax = fig.add_subplot(gs[0, :])
-    _style(ax)
-    c = natives["cond"]
-    ax.plot(c["t_d"], c["EC_mS_cm"], color=BLUE, lw=1.0, label="Observed (unvalidated probe)")
-    t_grid = np.linspace(0, c["t_d"].max(), 4000)
-    n_before = np.searchsorted(pulses, t_grid, side="right")
-    imm = pt["ec_pred_change_immediate_mS_cm_limiting_SCENARIO_T25C"].iloc[0]
-    nit = pt["ec_pred_change_nitrified_mS_cm_limiting_SCENARIO_T25C"].iloc[0]
-    ec0 = bal_v["ec_median_day_0.3_1.3_mS_cm"]
-    ax.plot(t_grid, ec0 + n_before * imm, color=ORANGE, lw=2, label="Predicted, no nitrification (limiting λ°, SCENARIO 25 °C)")
-    ax.plot(t_grid, ec0 + n_before * nit, color=AQUA, lw=2, label="Predicted, complete nitrification (limiting λ°, SCENARIO 25 °C)")
-    for tp in pulses:
-        ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-    ax.set_ylabel("EC (mS/cm)", color=INK, fontsize=9)
-    ax.set_title("a  Conductivity: predicted staircase vs record", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=8, frameon=False, loc="upper left")
-
-    # (b) NH4 with jumps and held segments
-    ax = fig.add_subplot(gs[1, :])
-    _style(ax)
-    n = natives["nh4"]
-    for _, h in held.iterrows():
-        ax.axvspan(h["t_start_d"], h["t_end_d"], color=GRID, alpha=0.9, lw=0)
-    ax.plot(n["t_d"], n["nh4_mgNH4_L"], color=BLUE, lw=0.8, label="Observed NH4+")
-    j = jumps[jumps["jump"]]
-    for cls, color, marker, lab in (("pulse_response", AQUA, "^", "Jump: pulse response"),
-                                    ("electrode_offset", VIOLET, "v", "Jump: electrode offset")):
-        s = j[j["class"] == cls]
-        ax.scatter(s["t_jump_d"], s["post_level"], color=color, marker=marker, s=40, zorder=3,
-                   edgecolor=SURFACE, linewidth=1.5, label=lab)
-    for tp in pulses:
-        ax.axvline(tp, color=INK2, lw=0.8, ls=":")
-    ax.plot([], [], color=GRID, lw=6, label="Held/damped output (σ_HF < 0.01)")
-    ax.set_ylabel("NH4+ (mg NH4+/L)", color=INK, fontsize=9)
-    ax.set_xlabel("Time (d, logger clock); dotted lines: NH4Cl pulses", color=INK2, fontsize=8)
-    ax.set_title("b  NH4+ electrode: detected jumps and held segments", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=8, frameon=False, loc="lower right")
-
-    # (c) predicted vs observed per pulse, one panel per sensor (each its own axis)
-    k = pt["pulse"].to_numpy()
-    x = np.arange(len(k))
-    wbar = 0.38
-    panels = [
-        ("NH4+ (mg NH4+/L)", pt["nh4_pred_change_mgNH4_L"], pt["nh4_obs_change_mgNH4_L"], None, "Predicted (dose)"),
-        ("EC (mS/cm)", pt["ec_pred_change_immediate_mS_cm_limiting_SCENARIO_T25C"], pt["ec_obs_change_mS_cm"], None,
-         "Predicted (limiting λ°, SCENARIO 25 °C)"),
-        ("ORP (mV)", None, pt["orp_obs_change_mV"],
-         pt[[col for col in pt.columns if col.startswith("orp_pred_change_mV_")]], ""),
-        ("pH", None, pt["ph_obs_change"], None, ""),
-    ]
-    for i, (lab, pred, obs, scen, pred_lab) in enumerate(panels):
-        ax = fig.add_subplot(gs[2, i])
-        _style(ax)
-        if pred is not None:
-            ax.bar(x - wbar / 2 - 0.01, pred, wbar, color=ORANGE, label=pred_lab)
-        if scen is not None:
-            lo_, hi_ = scen.min(axis=1), scen.max(axis=1)
-            ax.bar(x - wbar / 2 - 0.01, hi_ - lo_, wbar, bottom=lo_, color=ORANGE, alpha=0.45,
-                   label="Predicted range (Cl⁻ and temperature SCENARIOS)")
-        ax.bar(x + wbar / 2 + 0.01, obs, wbar, color=BLUE, label="Observed")
-        ax.axhline(0, color=INK2, lw=0.8)
-        ax.set_xticks(x, [f"P{v}" for v in k])
-        ax.set_title(lab, fontsize=9, color=INK, loc="left")
-        if pred is None and scen is None:
-            ax.text(0.02, 0.98, "prediction not computed:\nalkalinity missing", transform=ax.transAxes,
-                    fontsize=7, color=INK2, va="top")
-        ax.legend(fontsize=7, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=1)
-    fig.text(0.07, 0.315, "c  Change per pulse: predicted vs observed", fontsize=10, color=INK)
-    fig.savefig(path_png, dpi=150, facecolor=SURFACE, bbox_inches="tight")
-    fig.savefig(path_svg, facecolor=SURFACE, bbox_inches="tight", metadata={"Date": None})
-    plt.close(fig)
-
-
 # --- Stage --------------------------------------------------------------------
 def compute(cfg: Config, natives: dict[str, pd.DataFrame]) -> ValidationResult:
     pt, windows = pulse_table(cfg, natives)
@@ -525,7 +428,6 @@ def run(cfg: Config, out_dir: Path | str = OUTPUT_DIR) -> ValidationResult:
     r.clock.to_csv(d["tables"] / "clock_check.csv", index=False)
     r.references.to_csv(d["tables"] / "sensor_validation_references.csv", index=False)
     verdict_table(r.verdicts, r.pulse_table).to_csv(d["tables"] / "sensor_verdicts.csv", index=False)
-    figure(cfg, natives, r.pulse_table, r.balances, r.jumps, r.held,
-           d["figures"] / "fig3_sensor_validation.png", d["figures"] / "fig3_sensor_validation.svg")
+    figures.validation_figures(cfg, out_dir)
     write_report(cfg, r, d["reports"] / "sensor_validation.md")
     return r

@@ -248,12 +248,12 @@ def test_real_report_states_the_skill_range_and_the_limits(run_all_dir):
     alk = fit.loc["alkalinity_limited"]
     inside = st[(st["model"] == "alkalinity_limited") & st["inside_95"]]
     assert int(alk["n_starts_inside_95"]) == len(inside)
-    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
-    if len(inside) > 1:  # the range of the indistinguishable starts is in the §4 table (pass 5, Z4; was §1 point 7)
+    sec5 = rep.split("## 5.")[1].split("## 6.")[0]
+    if len(inside) > 1:  # the range of the indistinguishable starts is in the model-section table (§5, §4 before the W7 reorder; pass 5, Z4; was §1 point 7)
         for c in ("sel", "test", "forecast"):
             v = inside[f"{c}_skill_vs_null_diagnostic"]
             assert alk[f"{c}_skill_min_inside_95"] == pytest.approx(v.min())
-            assert f"{v.min():.3f} to {v.max():.3f}" in sec4
+            assert f"{v.min():.3f} to {v.max():.3f}" in sec5
     assert "holds against every converged start" in point7 or "does not hold against" in point7
     for name, g in st.groupby("model"):  # the chosen start reproduces the candidate's own skills
         ch = g[g["chosen"]].iloc[0]
@@ -265,7 +265,7 @@ def test_real_report_states_the_skill_range_and_the_limits(run_all_dir):
     cov = pd.read_csv(run_all_dir / "tables" / "states_interval_coverage.csv")
     ref = cov[cov["reference"]].iloc[0]
     phrase = f"{ref['coverage_scaled_estimated_rho']:.2f} of the windows at φ = {ref['phi']:g}"
-    for text in (point8, rep.split("## 3.")[1].split("## 4.")[0], states_md):
+    for text in (point8, rep.split("## 4.")[1].split("## 5.")[0], states_md):
         assert phrase in text and "conditional on the state classification" in text
     row = next(line for line in rep.splitlines() if line.startswith("| Model selection, activity decay"))
     for m in fit.index[~fit["cal_converged"].astype(bool)]:
@@ -317,7 +317,11 @@ def test_real_selection_fit_and_model_based_numbers_equal_pass3(run_all_dir):
             "whole_record_refit_rmse_log"]
     pd.testing.assert_frame_equal(new.set_index("model").loc[[sel], cols], old.set_index("model").loc[[sel], cols])
     for name in ("model_identifiability.csv", "nh4_truth_summary.csv", "nh4_truth_vectors.csv"):
-        pd.testing.assert_frame_equal(pd.read_csv(tab / name), _pass3(name))
+        # pass 6 (G8) appends provenance columns only: every column of the fixture is still compared exactly
+        got, ref = pd.read_csv(tab / name), _pass3(name)
+        extra = [c for c in got.columns if c not in ref.columns]
+        assert extra == ([] if name == "nh4_truth_summary.csv" else ["nh4_observation_model", "nh4_series", "assumptions"])
+        pd.testing.assert_frame_equal(got[list(ref.columns)], ref)
     pm, pm_old = pd.read_csv(tab / "pulses.csv"), _pass3("pulses_model_based.csv")
     key = ["pulse", "metric"]
     mb = pm[pm["metric"].str.contains("MODEL_BASED")].set_index(key).sort_index()

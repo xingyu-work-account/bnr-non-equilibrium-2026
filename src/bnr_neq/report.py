@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import figures as _figures
+
 SVG_HASHSALT = "bnr_neq"  # fixed salt for SVG element ids, so repeated runs write byte-identical SVG files
 
 
@@ -30,6 +32,18 @@ def fmt(value: object, digits: int = 4) -> str:
             return "NaN"
         return f"{value:.{digits}g}"
     return str(value)
+
+
+PROVENANCE_COLUMNS = ("nh4_observation_model", "nh4_series", "nh4_truth_id", "assumptions")
+
+
+def provenance_line(df: pd.DataFrame, series_col: str = "nh4_series") -> str:
+    """Pass 6 (G8): one sentence naming a table's NH4 observation model, series and assumptions, for tables whose rows
+    all share them (the CSV keeps them per row)."""
+    parts = [f"{label}: {', '.join(sorted(set(df[c].astype(str))))}" for label, c in
+             (("NH4 observation model", "nh4_observation_model"), ("series", series_col), ("assumptions", "assumptions"))
+             if c in df.columns]
+    return ("Provenance of every row: " + "; ".join(parts) + ".") if parts else ""
 
 
 def md_table(df: pd.DataFrame, digits: int = 4) -> str:
@@ -112,11 +126,15 @@ TABLE_DESCRIPTIONS = {
     "nh4_truth_balance.csv": "W1: dose-anchored TAN bound (with the W2 bound) against the inverted C(t)",
     "nh4_truth_w2_consistency.csv": "S2: per checkpoint, the Alk0 the C(t)-implied removal needs, and the verdict",
     "volume_constraints.csv": "W8: data constraints on the net water loss and the evaporation SCENARIOS checked",
-    "states_rules.csv": "W3: the pre-registered state rules, thresholds and excluded sensor features",
+    "states_rules.csv": ("W3: the state rules, thresholds and excluded sensor features, with their registration hash "
+                         "and status (revised after first results, not pre-registered)"),
     "states_fractions.csv": ("W3: time fraction of each state; idle fraction as bounds with its coverage, and the "
                              "CONDITIONAL value over classified time where coverage ≥ 0.5"),
     "states_timeline.csv": "W3: time-ordered runs of one process state",
-    "states_comparison.csv": "W3: NH4 consumption between indicator groups, block-bootstrap intervals",
+    "states_comparison.csv": ("W3: NH4 consumption between indicator groups, block-bootstrap intervals, and their "
+                              "reading against the synthetic null (G2)"),
+    "states_bootstrap_null_coverage.csv": ("G2: synthetic null check of the block bootstrap with the record's group "
+                                           "labels (coverage of the true difference 0 per φ)"),
     "states_interval_coverage.csv": ("Y3: synthetic AR(1) check of the autocorrelation-scaled slope interval (its "
                                      "coverage, i.e. the limit of the idle bounds)"),
     "pulses.csv": ("M7/W4: pulse-level metrics (η, removal, O2, energy family, idle-fraction bounds and coverage) with "
@@ -125,20 +143,11 @@ TABLE_DESCRIPTIONS = {
     "all_references.csv": "M8: every reference value of the implementation prompt",
 }
 
-FIGURES = [
-    ("fig1_linkage.png", "Figure 1. From sensor signals to process state, oxygen demand, energy and efficiency (W6)"),
-    ("fig2_overview.png", "Figure 2. Common-window overview with pulses, flags and electrode events (M3)"),
-    ("fig3_sensor_validation.png", "Figure 3. Sensor validation with the known pulses (M2)"),
-    ("fig5_dynamics.png", "Figure 5. Estimator validation, irreversibility, Onsager SNR, probability flux (M5)"),
-    ("fig6_model.png", "Figure 6. Reduced model with the electrode observation model (M6)"),
-    ("fig7_pulses.png", "Figure 7. Pulse-level descriptors (M7)"),
-    ("fig4_constraints.png", "Figure 4. Alkalinity bound, rate against free ammonia, state timeline (W6)"),
-    ("fig8_efficiency.png", "Figure 8. Per-pulse η, oxygen utilization, idle fraction and energy under SCENARIOS (W6)"),
-]
+FIGURES = _figures.FIGURES  # (png, caption) per single-axes figure; grouped in _figures.FIGURE_GROUPS
 
 def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     """Stated assumptions; every number comes from the configuration or a generated table."""
-    from . import dynamics, segments
+    from . import dynamics, segments, states
 
     nf = cfg.get("sensors.nh4_to_N_factor")
     temps = ", ".join(f"{x:g}" for x in cfg.get("scenarios.temperature_C"))
@@ -181,13 +190,15 @@ def assumptions(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
         "windows come from the configured pulse times."),
         ("MODEL-BASED quantities (η, model rates) are conditional on the selected M6 model; C0 and the electrode "
         "intercept are not identifiable."),
-        ("Process states (W3): pre-registered rules on the 1.01 d Theil-Sen slopes of C(t), pH and ORP and on ORP "
-         "relative to its centred 5 d median (±15 mV); the slope intervals are widened by √(n/n_eff) for the lag-1 "
+        ("Process states (W3): rules revised after their first results and frozen by SHA-256 from pass 6 "
+         f"(`{states.REGISTRATION_DOC}`; not pre-registered) on the 1.01 d Theil-Sen slopes of C(t), pH and ORP and on ORP "
+         f"relative to its centred 5 d median (±15 mV, {states.ORP_THRESHOLD_SCENARIO}); the slope intervals are widened by √(n/n_eff) for the lag-1 "
          "autocorrelation of each window's residuals; relative ORP assumes a slowly varying bare-Ag reference; QC-flagged "
          "bins carry no state. The idle fraction is reported as bounds with the classified fraction (coverage)."),
         ("Energy (W4): kLa_O2 and the field (process-water) aeration efficiency AE are SCENARIO ranges (AE source: "
          f"{cfg.get('scenarios.sae_source')}); the O2 supply is a capacity at DO = 0 while DO is not measured, whereas "
-         "the AE values are defined at about 2 mg/L DO; stirrer power is a laboratory-specific term only."),
+         "the AE values are field values at the plant's operating DO (> 0; not stated in the source table); stirrer power "
+         "is a laboratory-specific term only."),
         ("Model candidates (W5): alkalinity limitation uses the model's own alkalinity state (2 eq/mol N, nothing added) "
          "with K_ALK = 0.5 meq/L fixed (ASM3)."),
         ("Electrode fragments (R8): a slope window between two electrode steps (offset jumps, pulse-response jumps or "
@@ -473,7 +484,10 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
     def cmp_txt(name):
         r = sc.loc[name]
         if r["status"] == "computed":
-            return f"{r['diff']:+.2f} mg N/L/d (95 % block bootstrap {r['ci95_low']:+.2f} to {r['ci95_high']:+.2f})"
+            under = str(r.get("interval_reading", "")).startswith("UNDER-COVERS")
+            return (f"{r['diff']:+.2f} mg N/L/d (95 % block bootstrap {r['ci95_low']:+.2f} to {r['ci95_high']:+.2f}"
+                    + (f"; the interval under-covers on a synthetic null, coverage down to {r['null_coverage_min']:.2f}"
+                       if under else "") + ")")
         return f"{r['diff']:+.2f} mg N/L/d, interval not computed ({str(r['status']).removeprefix('not computed: ')})"
 
     lines = [
@@ -515,7 +529,7 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          "does not follow the fast post-pulse fall of the reading (its residuals are strongly autocorrelated), and "
          "the inversion assigns that misfit to removal; neither value is the better estimate while C0 and the "
          "intercept are not identifiable."),
-        (f"6. **Process state.** Pre-registered rules give a state to {100 * whole['classified_fraction']:.0f} % of the "
+        (f"6. **Process state.** The registered rules (revised after first results, not pre-registered) give a state to {100 * whole['classified_fraction']:.0f} % of the "
          f"record ({100 * whole['fraction_active_nitrification']:.0f} % active nitrification, "
          f"{100 * whole['fraction_inactive_oversupplied']:.0f} % inactive and over-supplied, "
          f"{100 * whole['fraction_oxygen_limited']:.0f} % oxygen-limited); the rest is sensor artifact "
@@ -532,7 +546,7 @@ def summary_lines(cfg, t: dict[str, pd.DataFrame]) -> list[str]:
          + mechanism_summary_txt(fit, sel, other_mechanism(fit))
          + " " + alk0_sentence(fit, alk_cmp, float(cons.loc[cal_end, "alk0_required_if_nitrified_meq_L"]), cal_end)
          + " With four pulses, time is confounded with activity decay, alkalinity loss, FA and electrode drift "
-         "(ranges, rankings and Alk0 profiles: §4)."),
+         "(ranges, rankings and Alk0 profiles: §5)."),
         (f"8. **Energy and efficiency.** The transferable energy measure is oxygen: 4.57 g O2 per g N removed, i.e. a "
          f"floor of {4.57 / max(saes):.2f}-{4.57 / min(saes):.2f} kWh/kg N at field aeration efficiencies of "
          f"{max(saes):g}-{min(saes):g} kg O2/kWh (SCENARIO). With aeration sized to kLa_O2 = {k_mid:g} 1/d (SCENARIO) "
@@ -782,7 +796,7 @@ def assemble_report(cfg, out_dir) -> Path:
     t["dynamics_windows.csv"] = _read(tables, "dynamics_windows.csv")
     check_required(t)  # raises before anything is written
     refs = all_references(tables)
-    figures.make_all(cfg, t, out_dir)
+    figures.make_w6(cfg, t, out_dir)
     for fig, _ in FIGURES:
         if not (out_dir / "figures" / fig).is_file():
             raise FileNotFoundError(f"{out_dir / 'figures' / fig} missing")
@@ -796,7 +810,9 @@ def assemble_report(cfg, out_dir) -> Path:
     dp = t["data_properties.csv"][["sensor", "file", "rows_valid", "rows_dropped", "t_min_d", "t_max_d", "value_min",
                                    "value_max", "interval_median_s"]]
     pm = t["pulses.csv"]
-    fig = {f: f"![{c}](../figures/{f})\n\n*{c}*\n" for f, c in FIGURES}
+    fig = {key: f"*{caption}*\n\n" + "".join(f"![{panel}](../figures/{stem}.png)\n\n*{panel}.*\n\n"
+                                             for stem, panel in panels)
+           for key, caption, panels in _figures.FIGURE_GROUPS}
     sc = cfg.raw["scenarios"]
     fit = t["model_fit.csv"]
     lines = [
@@ -810,19 +826,19 @@ def assemble_report(cfg, out_dir) -> Path:
         "## 1. What the data say about the process",
         "",
         *[x + "\n" for x in summary_lines(cfg, t)],
-        fig["fig1_linkage.png"],
+        fig["fig1"],
         "## 2. Energy and efficiency",
         "",
         (f"The metric family per pulse (constant volume; all rows with inputs and status in `pulses.csv`). SCENARIO "
          f"ranges: kLa_O2 = {', '.join(f'{x:g}' for x in sc['kLa_O2_per_d'])} 1/d (not measured); field (process-water) "
-         f"aeration efficiency AE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (at about 2 "
-         "mg/L DO, not the clean-water standard SAE; fine pore: 3.6-4.8 in clean water against 0.7-2.6 in process "
-         "water; metric suffix `AE`, configuration key `sae_field_kgO2_per_kWh`), source: "
-         f"{sc['sae_source']}. The source's own caveat applies: its table \"should not be used as a general guide line "
-         "and not for design\" (Stenstrom and Rosso 2010, p. 55, as read by the reviewer), so these are scenario "
-         "values only. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
+         f"aeration efficiency AE = {', '.join(f'{x:g}' for x in sc['sae_field_kgO2_per_kWh'])} kg O2/kWh (field "
+         "conditions, not the clean-water standard SAE; fine pore: 5.0-6.5 standard against 2.5-3.5 field; metric "
+         "suffix `AE`, configuration key `sae_field_kgO2_per_kWh`), source: "
+         f"{sc['sae_source']}. Low and high are the extremes of the diffused-air rows that include blower power, the "
+         "central value their geometric mean (pass 6, G5, `docs/progress.md`); they are values of full-scale "
+         "equipment, not of this vessel, so these are scenario values only. O2 supply = kLa (C* − DO) V Δt with DO = 0 while DO is not measured, so utilization is a "
          "lower bound and the supply-based energy an upper bound; the supply-based energy also divides a capacity at "
-         "DO = 0 by an AE defined at DO = 2 mg/L, an inconsistency that inflates it further. The demand-based energy "
+         "DO = 0 by an AE at the plant's operating DO (> 0), an inconsistency that inflates it further. The demand-based energy "
          "(4.57/AE kWh/kg N) is the "
          "floor that any aeration system must spend on the N actually removed; the supply-based value adds the aeration "
          "spent while the biomass was idle. The stirrer power is a laboratory-specific term (not measured, "
@@ -830,8 +846,19 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         md_table(energy_table(pm), digits=3),
         "",
-        fig["fig8_efficiency.png"],
-        "## 3. Process state and the constraints on conversion",
+        fig["fig8"],
+        "## 3. Sensor validity",
+        "",
+        "From `sensor_verdicts.csv` (criteria fixed before computing the observations):",
+        "",
+        md_table(verdicts),
+        "",
+        md_table(pv[["pulse", "nh4_obs_change_mgNH4_L", "nh4_response_fraction", "ec_obs_change_mS_cm",
+                     "orp_obs_change_mV", "ph_obs_change"]], digits=3),
+        "",
+        fig["fig3"],
+        fig["fig2"],
+        "## 4. Process state and the constraints on conversion",
         "",
         "### Process states (W3)",
         "",
@@ -847,8 +874,18 @@ def assemble_report(cfg, out_dir) -> Path:
                                             "idle_fraction_lower_bound", "idle_fraction_upper_bound",
                                             "idle_fraction_of_classified_time", "status"]], digits=2),
         "",
+        (f"Rules SHA-256 `{t['states_rules.csv']['registration_sha256'].iloc[0]}` ({states.REGISTRATION_DOC}): "
+         f"{t['states_rules.csv']['registration_status'].iloc[0]}. Each comparison interval is read against a "
+         "synthetic null with the record's own group labels (`interval_reading`, `states_bootstrap_null_coverage.csv`): "
+         f"an interval that covers the true difference 0 in fewer than {states.NULL_COVERAGE_MIN_OK:g} of the null "
+         "replicates at some φ is too narrow, and an interval excluding 0 is then not evidence of a difference."),
+        "",
         md_table(t["states_comparison.csv"][["comparison", "role", "diff", "ci95_low", "ci95_high", "n_a", "n_b",
-                                              "block_bins", "status"]], digits=3),
+                                              "block_bins", "status", "null_coverage_min", "interval_reading"]],
+                 digits=3),
+        "",
+        md_table(t["states_bootstrap_null_coverage.csv"][["comparison", "phi", "n_computed", "coverage_of_zero",
+                                                           "block_bins_median"]], digits=3),
         "",
         md_table(t["states_interval_coverage.csv"][["phi", "n_points", "n_windows", "nominal", "coverage_unscaled",
                                                      "coverage_scaled_estimated_rho", "coverage_scaled_true_rho",
@@ -866,14 +903,17 @@ def assemble_report(cfg, out_dir) -> Path:
                                                                   "tan_residual_min_end_mgN_L",
                                                                   "fa_residual_min_end_mgNH3_L"]], digits=3),
         "",
-        md_table(t["nh4_truth_w2_consistency.csv"].drop(columns=["alk0_scan_max_meq_L"]), digits=3),
+        provenance_line(t["nh4_truth_w2_consistency.csv"], "nh4_truth_id"),
         "",
-        fig["fig4_constraints.png"],
+        md_table(t["nh4_truth_w2_consistency.csv"].drop(columns=["alk0_scan_max_meq_L", *PROVENANCE_COLUMNS],
+                                                        errors="ignore"), digits=3),
+        "",
+        fig["fig4"],
         "### Water volume (W8)",
         "",
         md_table(t["volume_constraints.csv"], digits=3),
         "",
-        "## 4. Reduced model and mechanism (M6, W5)",
+        "## 5. Reduced model and mechanism (M6, W5)",
         "",
         (f"Convergence policy (one for every candidate): {model.CONVERGENCE_POLICY} A candidate whose calibration did "
          "not converge is excluded from selection (`selection_status`); its skills stay in the table and are not "
@@ -907,7 +947,10 @@ def assemble_report(cfg, out_dir) -> Path:
          + (" " + model.volume_scaling_text(t["model_volume_scenario_summary.csv"])
             if len(t["model_volume_scenario_summary.csv"]) else "")),
         "",
-        md_table(numeric_cells(t["model_volume_scenario_summary.csv"].drop(columns=["role"])), digits=3),
+        provenance_line(t["model_volume_scenario_summary.csv"]),
+        "",
+        md_table(numeric_cells(t["model_volume_scenario_summary.csv"].drop(
+            columns=["role", "constant_volume_nh4_series", *PROVENANCE_COLUMNS], errors="ignore")), digits=3),
         "",
         md_table(numeric_cells(t["model_volume_scenarios.csv"][["volume_scenario", "model", "cal_converged",
                                                                 "sel_skill_vs_null", "test_skill_vs_null",
@@ -916,23 +959,14 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         "Consistency checks of the selected model (true by construction where noted; not findings):",
         "",
-        md_table(numeric_cells(t["model_checks.csv"]), digits=3),
+        provenance_line(t["model_checks.csv"]),
+        "",
+        md_table(numeric_cells(t["model_checks.csv"].drop(columns=list(PROVENANCE_COLUMNS), errors="ignore")), digits=3),
         "",
         md_table(numeric_cells(t["model_identifiability.csv"][["parameter", "estimate", "ci95_low", "ci95_high",
                                                                 "identifiable"]]), digits=3),
         "",
-        fig["fig6_model.png"],
-        "## 5. Sensor validity",
-        "",
-        "From `sensor_verdicts.csv` (criteria fixed before computing the observations):",
-        "",
-        md_table(verdicts),
-        "",
-        md_table(pv[["pulse", "nh4_obs_change_mgNH4_L", "nh4_response_fraction", "ec_obs_change_mS_cm",
-                     "orp_obs_change_mV", "ph_obs_change"]], digits=3),
-        "",
-        fig["fig3_sensor_validation.png"],
-        fig["fig2_overview.png"],
+        fig["fig6"],
         "## 6. Status of the conclusions",
         "",
         md_table(labels),
@@ -963,12 +997,12 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         onsager_conclusion(t["dynamics_onsager.csv"]),
         "",
-        fig["fig5_dynamics.png"],
+        fig["fig5"],
         "## Supplement S2. Detailed tables",
         "",
         "### Verified data properties",
         "",
-        md_table(dp, digits=6),
+        md_table(dp, digits=4),
         "",
         "### Consumption slopes on the electrode reading (M3; gain-corrected and reading-as-TAN columns are SENSITIVITY)",
         "",
@@ -984,15 +1018,18 @@ def assemble_report(cfg, out_dir) -> Path:
         "",
         "### Thermodynamics and balances (M4)",
         "",
+        ("The affinity steps ΔA below and the coexistence affinity are CONSISTENCY CHECKS (not findings; §6): a log "
+         "ratio of concentrations and an affinity computed from assumed concentrations."),
+        "",
         md_table(t["thermo_affinity_steps.csv"].drop(columns=["note"]), digits=3),
         "",
-        md_table(t["balance_nitrogen.csv"], digits=4),
+        md_table(numeric_cells(t["balance_nitrogen.csv"]), digits=3),
         "",
-        md_table(t["balance_alkalinity.csv"], digits=4),
+        md_table(numeric_cells(t["balance_alkalinity.csv"]), digits=3),
         "",
         "### Pulse-level descriptors (M7)",
         "",
-        fig["fig7_pulses.png"],
+        fig["fig7"],
         md_table(t["pulses_associations.csv"], digits=3),
         "",
         "### Reference values",

@@ -17,6 +17,11 @@ Z1_COLS = ["C_start_ratio_to_constant_volume", "phi_start_median", "C_end_ratio_
            "ratio_within_phi_tolerance"]
 NEW_COLS = {"model_fit.csv": ["cal_at_bounds"], "model_calibration_starts.csv": ["cal_at_bounds"],
             "model_volume_scenario_summary.csv": Z1_COLS}
+# pass 6 (G6, G8): provenance and assumption columns appended to the same tables (docs/progress.md, pass 6)
+PASS6_COLS = {"model_fit.csv": ["nh4_observation_model", "nh4_series", "assumptions"],
+              "model_calibration_starts.csv": ["nh4_observation_model", "nh4_series", "assumptions"],
+              "model_volume_scenario_summary.csv": ["nh4_observation_model", "nh4_series", "constant_volume_nh4_series",
+                                                    "assumptions"]}
 
 T = np.round(np.arange(1.0, 20.0, 0.01), 10)
 PH = 7.6 - 0.02 * (T - 1)
@@ -183,7 +188,7 @@ def test_real_pre_existing_columns_equal_8e10d0e(run_all_dir):
         if not ref.is_file():
             pytest.fail(f"fixture {ref} missing (extracted with git show 8e10d0e; docs/progress.md, pass 5)")
         old, new = pd.read_csv(ref), pd.read_csv(run_all_dir / "tables" / name)
-        assert [c for c in new.columns if c not in old.columns] == new_cols
+        assert [c for c in new.columns if c not in old.columns] == new_cols + PASS6_COLS[name]  # pass 6 (G8): appended
         pd.testing.assert_frame_equal(new[list(old.columns)], old)
 
 
@@ -206,9 +211,9 @@ def test_real_volume_scaling_columns_and_statement(run_all_dir, cfg):
     txt = M.volume_scaling_text(summ)
     rep = (run_all_dir / "reports" / "analysis_report.md").read_text()
     point9 = next(line for line in rep.splitlines() if line.startswith("9. **The closed frame"))
-    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
+    sec5 = rep.split("## 5.")[1].split("## 6.")[0]
     model_md = (run_all_dir / "reports" / "model.md").read_text()
-    for text in (point9, sec4, model_md):  # one statement, decided by the table and the tolerance
+    for text in (point9, sec5, model_md):  # one statement, decided by the table and the tolerance
         assert txt in text
     scaled = bool(summ["ratio_within_phi_tolerance"].all())
     assert txt.startswith("Every scenario C(t) is the constant-volume C(t) scaled") == scaled
@@ -224,10 +229,10 @@ def test_real_bound_flags_are_named_in_the_report(run_all_dir):
         ch = st[(st["model"] == r["model"]) & st["chosen"]].iloc[0]
         assert str(ch["cal_at_bounds"]) == str(r["cal_at_bounds"])
     rep = (run_all_dir / "reports" / "analysis_report.md").read_text()
-    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
+    sec5 = rep.split("## 5.")[1].split("## 6.")[0]
     model_md = (run_all_dir / "reports" / "model.md").read_text()
     txt = M.bounds_text(fit)
-    assert txt in sec4 and txt in model_md
+    assert txt in sec5 and txt in model_md
     for m in fit.loc[fit["cal_at_bounds"].fillna("").astype(str) != "", "model"]:
         assert f"{m} (" in txt
     assert "Jacobian condition number" in model_md or "condition number 4.2e6" in model_md
@@ -244,5 +249,5 @@ def test_real_point7_is_short_and_the_ranges_are_in_the_section4_table(run_all_d
     for r in R.other_mechanism(fit):
         assert f"{r['model']} (test {R._fmt_range(*R._range(r, 'test'))})" in point7
     assert "time is confounded" in point7
-    sec4 = rep.split("## 4.")[1].split("## 5.")[0]
-    assert R.md_table(R.mechanism_table(fit), digits=3) in sec4
+    sec5 = rep.split("## 5.")[1].split("## 6.")[0]
+    assert R.md_table(R.mechanism_table(fit), digits=3) in sec5
